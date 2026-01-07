@@ -11,6 +11,7 @@ const MODEL_STORAGE_KEY = 'betterGemini_defaultModel';
 // Default settings - all features enabled by default
 const DEFAULT_SETTINGS = {
   exportMarkdown: true,
+  exportFullChat: true,
   keyboardShortcuts: true,
   widerChatWidth: true,
   defaultModel: true
@@ -22,6 +23,7 @@ const DEFAULT_MODEL = 'thinking';
 // DOM element references
 const elements = {
   exportMarkdown: null,
+  exportFullChat: null,
   keyboardShortcuts: null,
   widerChatWidth: null,
   defaultModel: null,
@@ -36,6 +38,7 @@ const elements = {
  */
 function initializeElements() {
   elements.exportMarkdown = document.getElementById('exportMarkdown');
+  elements.exportFullChat = document.getElementById('exportFullChat');
   elements.keyboardShortcuts = document.getElementById('keyboardShortcuts');
   elements.widerChatWidth = document.getElementById('widerChatWidth');
   elements.defaultModel = document.getElementById('defaultModel');
@@ -57,6 +60,7 @@ async function loadSettings() {
 
     // Apply settings to checkboxes
     elements.exportMarkdown.checked = settings.exportMarkdown !== false;
+    elements.exportFullChat.checked = settings.exportFullChat !== false;
     elements.keyboardShortcuts.checked = settings.keyboardShortcuts !== false;
     elements.widerChatWidth.checked = settings.widerChatWidth !== false;
     elements.defaultModel.checked = settings.defaultModel !== false;
@@ -72,6 +76,7 @@ async function loadSettings() {
     console.error('[Better Gemini] Error loading settings:', error);
     // Apply defaults on error
     elements.exportMarkdown.checked = true;
+    elements.exportFullChat.checked = true;
     elements.keyboardShortcuts.checked = true;
     elements.widerChatWidth.checked = true;
     elements.defaultModel.checked = true;
@@ -97,6 +102,7 @@ function updateModelSelectorVisibility() {
 async function saveSettings() {
   const settings = {
     exportMarkdown: elements.exportMarkdown.checked,
+    exportFullChat: elements.exportFullChat.checked,
     keyboardShortcuts: elements.keyboardShortcuts.checked,
     widerChatWidth: elements.widerChatWidth.checked,
     defaultModel: elements.defaultModel.checked

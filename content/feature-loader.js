@@ -20,6 +20,7 @@
   // Default settings - all features enabled by default
   var DEFAULT_SETTINGS = {
     exportMarkdown: true,
+    exportFullChat: true,
     keyboardShortcuts: true,
     widerChatWidth: true,
     defaultModel: true,
@@ -47,6 +48,7 @@
   // ========== FEATURE STATE ==========
   var featuresInitialized = {
     exportMarkdown: false,
+    exportFullChat: false,
     keyboardShortcuts: false,
     widerChatWidth: false,
     defaultModel: false,
@@ -98,6 +100,46 @@
       }
     } else {
       logError('Export Markdown feature not found on window');
+    }
+  }
+
+  /**
+   * Initializes the Export Full Chat feature
+   */
+  function initExportFullChat() {
+    if (featuresInitialized.exportFullChat) {
+      return;
+    }
+
+    if (window.BetterGeminiExportFullChat && typeof window.BetterGeminiExportFullChat.init === 'function') {
+      try {
+        window.BetterGeminiExportFullChat.init();
+        featuresInitialized.exportFullChat = true;
+        log('Export Full Chat feature initialized');
+      } catch (error) {
+        logError('Failed to initialize Export Full Chat:', error);
+      }
+    } else {
+      logError('Export Full Chat feature not found on window');
+    }
+  }
+
+  /**
+   * Destroys (disables) the Export Full Chat feature
+   */
+  function destroyExportFullChat() {
+    if (!featuresInitialized.exportFullChat) {
+      return;
+    }
+
+    if (window.BetterGeminiExportFullChat && typeof window.BetterGeminiExportFullChat.destroy === 'function') {
+      try {
+        window.BetterGeminiExportFullChat.destroy();
+        featuresInitialized.exportFullChat = false;
+        log('Export Full Chat feature destroyed');
+      } catch (error) {
+        logError('Failed to destroy Export Full Chat:', error);
+      }
     }
   }
 
@@ -237,6 +279,10 @@
         initExportMarkdown();
       }
 
+      if (settings.exportFullChat !== false) {
+        initExportFullChat();
+      }
+
       if (settings.keyboardShortcuts !== false) {
         initKeyboardShortcuts();
       }
@@ -269,6 +315,13 @@
     // Handle Export Markdown - can only be enabled (no destroy function)
     if (newSettings.exportMarkdown !== false && !featuresInitialized.exportMarkdown) {
       initExportMarkdown();
+    }
+
+    // Handle Export Full Chat
+    if (newSettings.exportFullChat !== false && !featuresInitialized.exportFullChat) {
+      initExportFullChat();
+    } else if (newSettings.exportFullChat === false && featuresInitialized.exportFullChat) {
+      destroyExportFullChat();
     }
 
     // Handle Keyboard Shortcuts
@@ -325,9 +378,11 @@
       initializeFeatures: initializeFeatures,
       handleSettingsChange: handleSettingsChange,
       initExportMarkdown: initExportMarkdown,
+      initExportFullChat: initExportFullChat,
       initKeyboardShortcuts: initKeyboardShortcuts,
       initWiderChat: initWiderChat,
       initDefaultModel: initDefaultModel,
+      destroyExportFullChat: destroyExportFullChat,
       destroyKeyboardShortcuts: destroyKeyboardShortcuts,
       destroyWiderChat: destroyWiderChat,
       destroyDefaultModel: destroyDefaultModel,
@@ -338,6 +393,7 @@
       _resetForTesting: function() {
         featuresInitialized = {
           exportMarkdown: false,
+          exportFullChat: false,
           keyboardShortcuts: false,
           widerChatWidth: false,
           defaultModel: false,

@@ -1,0 +1,107 @@
+name: Build Extension
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version and build info
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' manifest.json)
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          BUILD_NAME="better-gemini-v${VERSION}-${SHORT_SHA}"
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "build_name=$BUILD_NAME" >> $GITHUB_OUTPUT
+
+          echo "Extension version: $VERSION"
+          echo "Commit SHA: $SHORT_SHA"
+          echo "Build name: $BUILD_NAME"
+
+      - name: Create extension build directory
+        run: mkdir -p build
+
+      - name: Copy extension files
+        run: |
+          # Copy root files
+          cp manifest.json build/
+          cp background.js build/
+          cp config.js build/
+
+          # Copy content scripts
+          mkdir -p build/content/features
+          cp content/injector.js build/content/
+          cp content/injector-core.js build/content/
+          cp content/feature-loader.js build/content/
+          cp content/features/*.js build/content/features/
+
+          # Copy popup
+          mkdir -p build/popup
+          cp popup/popup.html build/popup/
+          cp popup/popup.css build/popup/
+          cp popup/popup.js build/popup/
+
+          # Copy options page
+          mkdir -p build/options
+          cp options/options.html build/options/
+          cp options/options.css build/options/
+          cp options/options.js build/options/
+
+          # Copy icons (only png files)
+          mkdir -p build/icons
+          cp icons/*.png build/icons/
+
+      - name: List build contents
+        run: |
+          echo "Build contents:"
+          find build -type f | sort
+
+      - name: Create ZIP archive
+        run: |
+          cd build
+          zip -r ../${{ steps.version.outputs.build_name }}.zip .
+          cd ..
+          echo "Created: ${{ steps.version.outputs.build_name }}.zip"
+          echo ""
+          echo "Archive contents:"
+          unzip -l ${{ steps.version.outputs.build_name }}.zip
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.build_name }}
+          path: ${{ steps.version.outputs.build_name }}.zip
+          retention-days: 90
+
+      - name: Create GitHub Release
+        if: inputs.create_release == true || startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Better Gemini v${{ steps.version.outputs.version }}
+          files: ${{ steps.version.outputs.build_name }}.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
