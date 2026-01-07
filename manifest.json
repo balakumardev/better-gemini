@@ -23,6 +23,7 @@
         "content/features/wider-chat.js",
         "content/features/keyboard-shortcuts.js",
         "content/features/export-markdown.js",
+        "content/features/default-model.js",
         "content/feature-loader.js"
       ],
       "run_at": "document_idle"

@@ -49,6 +49,29 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <label for="defaultModel" class="setting-label">Default Model</label>
+            <p class="setting-description">Automatically select this model for every chat</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="defaultModel" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item sub-setting" id="modelSelectorContainer">
+          <div class="setting-info">
+            <label for="selectedModel" class="setting-label">Preferred Model</label>
+            <p class="setting-description">Choose which model to use by default</p>
+          </div>
+          <select id="selectedModel" class="model-select">
+            <option value="fast">Fast - Quick answers</option>
+            <option value="thinking">Thinking - Complex problems</option>
+            <option value="pro">Pro - Advanced math & code</option>
+          </select>
+        </div>
       </section>
 
       <div class="actions">

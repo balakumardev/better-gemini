@@ -22,6 +22,7 @@
     exportMarkdown: true,
     keyboardShortcuts: true,
     widerChatWidth: true,
+    defaultModel: true,
   };
 
   // ========== LOGGING ==========
@@ -48,6 +49,7 @@
     exportMarkdown: false,
     keyboardShortcuts: false,
     widerChatWidth: false,
+    defaultModel: false,
   };
 
   // ========== SETTINGS MANAGEMENT ==========
@@ -179,6 +181,46 @@
     }
   }
 
+  /**
+   * Initializes the Default Model feature
+   */
+  function initDefaultModel() {
+    if (featuresInitialized.defaultModel) {
+      return;
+    }
+
+    if (window.BetterGeminiDefaultModel && typeof window.BetterGeminiDefaultModel.init === 'function') {
+      try {
+        window.BetterGeminiDefaultModel.init();
+        featuresInitialized.defaultModel = true;
+        log('Default Model feature initialized');
+      } catch (error) {
+        logError('Failed to initialize Default Model:', error);
+      }
+    } else {
+      logError('Default Model feature not found on window');
+    }
+  }
+
+  /**
+   * Destroys (disables) the Default Model feature
+   */
+  function destroyDefaultModel() {
+    if (!featuresInitialized.defaultModel) {
+      return;
+    }
+
+    if (window.BetterGeminiDefaultModel && typeof window.BetterGeminiDefaultModel.destroy === 'function') {
+      try {
+        window.BetterGeminiDefaultModel.destroy();
+        featuresInitialized.defaultModel = false;
+        log('Default Model feature destroyed');
+      } catch (error) {
+        logError('Failed to destroy Default Model:', error);
+      }
+    }
+  }
+
   // ========== MAIN INITIALIZATION ==========
 
   /**
@@ -201,6 +243,10 @@
 
       if (settings.widerChatWidth !== false) {
         initWiderChat();
+      }
+
+      if (settings.defaultModel !== false) {
+        initDefaultModel();
       }
 
       log('Feature initialization complete');
@@ -238,6 +284,13 @@
     } else if (newSettings.widerChatWidth === false && featuresInitialized.widerChatWidth) {
       destroyWiderChat();
     }
+
+    // Handle Default Model
+    if (newSettings.defaultModel !== false && !featuresInitialized.defaultModel) {
+      initDefaultModel();
+    } else if (newSettings.defaultModel === false && featuresInitialized.defaultModel) {
+      destroyDefaultModel();
+    }
   }
 
   // ========== BROWSER INITIALIZATION ==========
@@ -274,8 +327,10 @@
       initExportMarkdown: initExportMarkdown,
       initKeyboardShortcuts: initKeyboardShortcuts,
       initWiderChat: initWiderChat,
+      initDefaultModel: initDefaultModel,
       destroyKeyboardShortcuts: destroyKeyboardShortcuts,
       destroyWiderChat: destroyWiderChat,
+      destroyDefaultModel: destroyDefaultModel,
       DEFAULT_SETTINGS: DEFAULT_SETTINGS,
       STORAGE_KEY: STORAGE_KEY,
       getFeaturesInitialized: function() { return Object.assign({}, featuresInitialized); },
@@ -285,6 +340,7 @@
           exportMarkdown: false,
           keyboardShortcuts: false,
           widerChatWidth: false,
+          defaultModel: false,
         };
       },
     };

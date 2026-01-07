@@ -6,19 +6,27 @@
 
 // Storage key for all feature settings
 const STORAGE_KEY = 'betterGemini_features';
+const MODEL_STORAGE_KEY = 'betterGemini_defaultModel';
 
 // Default settings - all features enabled by default
 const DEFAULT_SETTINGS = {
   exportMarkdown: true,
   keyboardShortcuts: true,
-  widerChatWidth: true
+  widerChatWidth: true,
+  defaultModel: true
 };
+
+// Default model
+const DEFAULT_MODEL = 'thinking';
 
 // DOM element references
 const elements = {
   exportMarkdown: null,
   keyboardShortcuts: null,
   widerChatWidth: null,
+  defaultModel: null,
+  selectedModel: null,
+  modelSelectorContainer: null,
   saveButton: null,
   saveStatus: null
 };
@@ -30,6 +38,9 @@ function initializeElements() {
   elements.exportMarkdown = document.getElementById('exportMarkdown');
   elements.keyboardShortcuts = document.getElementById('keyboardShortcuts');
   elements.widerChatWidth = document.getElementById('widerChatWidth');
+  elements.defaultModel = document.getElementById('defaultModel');
+  elements.selectedModel = document.getElementById('selectedModel');
+  elements.modelSelectorContainer = document.getElementById('modelSelectorContainer');
   elements.saveButton = document.getElementById('saveButton');
   elements.saveStatus = document.getElementById('saveStatus');
 }
@@ -40,21 +51,43 @@ function initializeElements() {
  */
 async function loadSettings() {
   try {
-    const result = await chrome.storage.sync.get(STORAGE_KEY);
+    const result = await chrome.storage.sync.get([STORAGE_KEY, MODEL_STORAGE_KEY]);
     const settings = result[STORAGE_KEY] || DEFAULT_SETTINGS;
+    const selectedModel = result[MODEL_STORAGE_KEY] || DEFAULT_MODEL;
 
     // Apply settings to checkboxes
     elements.exportMarkdown.checked = settings.exportMarkdown !== false;
     elements.keyboardShortcuts.checked = settings.keyboardShortcuts !== false;
     elements.widerChatWidth.checked = settings.widerChatWidth !== false;
+    elements.defaultModel.checked = settings.defaultModel !== false;
 
-    console.log('[Better Gemini] Settings loaded:', settings);
+    // Apply selected model
+    elements.selectedModel.value = selectedModel;
+
+    // Update model selector visibility
+    updateModelSelectorVisibility();
+
+    console.log('[Better Gemini] Settings loaded:', settings, 'Model:', selectedModel);
   } catch (error) {
     console.error('[Better Gemini] Error loading settings:', error);
     // Apply defaults on error
     elements.exportMarkdown.checked = true;
     elements.keyboardShortcuts.checked = true;
     elements.widerChatWidth.checked = true;
+    elements.defaultModel.checked = true;
+    elements.selectedModel.value = DEFAULT_MODEL;
+    updateModelSelectorVisibility();
+  }
+}
+
+/**
+ * Updates the visibility of the model selector based on defaultModel toggle
+ */
+function updateModelSelectorVisibility() {
+  if (elements.defaultModel.checked) {
+    elements.modelSelectorContainer.style.display = 'flex';
+  } else {
+    elements.modelSelectorContainer.style.display = 'none';
   }
 }
 
@@ -65,12 +98,18 @@ async function saveSettings() {
   const settings = {
     exportMarkdown: elements.exportMarkdown.checked,
     keyboardShortcuts: elements.keyboardShortcuts.checked,
-    widerChatWidth: elements.widerChatWidth.checked
+    widerChatWidth: elements.widerChatWidth.checked,
+    defaultModel: elements.defaultModel.checked
   };
 
+  const selectedModel = elements.selectedModel.value;
+
   try {
-    await chrome.storage.sync.set({ [STORAGE_KEY]: settings });
-    console.log('[Better Gemini] Settings saved:', settings);
+    await chrome.storage.sync.set({
+      [STORAGE_KEY]: settings,
+      [MODEL_STORAGE_KEY]: selectedModel
+    });
+    console.log('[Better Gemini] Settings saved:', settings, 'Model:', selectedModel);
     showSaveConfirmation();
   } catch (error) {
     console.error('[Better Gemini] Error saving settings:', error);
@@ -115,6 +154,9 @@ function initialize() {
 
   // Add event listener for save button
   elements.saveButton.addEventListener('click', saveSettings);
+
+  // Add event listener for defaultModel toggle to show/hide model selector
+  elements.defaultModel.addEventListener('change', updateModelSelectorVisibility);
 }
 
 // Initialize when DOM is ready
