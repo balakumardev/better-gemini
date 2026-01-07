@@ -27,3 +27,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Edge debug profile (project-specific browser instance)
+.edge-debug-profile/
+.edge-debug-port
+

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Better Gemini Options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Better Gemini</h1>
+      <p class="subtitle">Configure your Gemini enhancement features</p>
+    </header>
+
+    <main>
+      <section class="settings-section">
+        <h2>Features</h2>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <label for="exportMarkdown" class="setting-label">Copy as Markdown</label>
+            <p class="setting-description">Adds a "MD" button next to each response to copy it as Markdown</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="exportMarkdown" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <label for="keyboardShortcuts" class="setting-label">Keyboard Shortcuts</label>
+            <p class="setting-description">Power-user keyboard shortcuts for Gemini</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="keyboardShortcuts" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <label for="widerChatWidth" class="setting-label">Wider Chat Width</label>
+            <p class="setting-description">Increase the chat container width for better readability</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="widerChatWidth" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button id="saveButton" class="btn-primary">Save Settings</button>
+        <span id="saveStatus" class="save-status"></span>
+      </div>
+    </main>
+
+    <footer>
+      <p class="version">Version 1.0.0</p>
+    </footer>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

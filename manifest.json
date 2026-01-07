@@ -18,7 +18,13 @@
   "content_scripts": [
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["content/injector.js"],
+      "js": [
+        "content/injector.js",
+        "content/features/wider-chat.js",
+        "content/features/keyboard-shortcuts.js",
+        "content/features/export-markdown.js",
+        "content/feature-loader.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -37,6 +43,7 @@
       "128": "icons/icon128.png"
     },
     "default_title": "Better Gemini"
-  }
+  },
+  "options_page": "options/options.html"
 }
 
