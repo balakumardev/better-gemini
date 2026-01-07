@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mock Gemini - For E2E Testing</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Google Sans', Arial, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; display: flex; flex-direction: column; }
+    .header { padding: 16px 24px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 12px; }
+    .logo { font-size: 20px; font-weight: 500; }
+    .main { flex: 1; display: flex; flex-direction: column; max-width: 900px; margin: 0 auto; width: 100%; padding: 24px; }
+    .conversation-container { flex: 1; overflow-y: auto; margin-bottom: 24px; }
+    .message { padding: 16px; border-radius: 8px; margin-bottom: 12px; }
+    .user-message { background: #2d2d44; margin-left: 20%; }
+    .model-response { background: #1e1e30; margin-right: 20%; }
+    .input-area { position: relative; background: #2d2d44; border-radius: 24px; padding: 12px 16px; display: flex; align-items: flex-end; gap: 12px; }
+    /* Gemini uses contenteditable div with these selectors */
+    .ql-editor { min-height: 24px; max-height: 200px; overflow-y: auto; flex: 1; outline: none; line-height: 1.5; }
+    .ql-editor:empty::before { content: attr(data-placeholder); color: #888; }
+    rich-textarea { display: block; flex: 1; }
+    .send-button { background: #8ab4f8; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+    .send-button:hover:not(:disabled) { background: #aecbfa; }
+    .send-button:disabled { background: #555; cursor: not-allowed; }
+    .send-button svg { width: 20px; height: 20px; fill: #1a1a2e; }
+    .loading-indicator { display: none; padding: 16px; text-align: center; color: #888; }
+    .loading-indicator.visible { display: block; }
+    .streaming { animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    /* Status display for testing */
+    #test-status { position: fixed; top: 10px; right: 10px; background: #333; padding: 10px; border-radius: 8px; font-size: 12px; max-width: 300px; }
+    #test-status.success { border: 2px solid #4caf50; }
+    #test-status.error { border: 2px solid #f44336; }
+    #injected-content { margin-top: 8px; word-wrap: break-word; max-height: 100px; overflow-y: auto; background: #222; padding: 8px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="logo">🤖 Mock Gemini</span>
+    <span style="color: #888; font-size: 14px;">E2E Testing Environment</span>
+  </div>
+
+  <div class="main">
+    <div class="conversation-container" id="conversation">
+      <!-- Messages will appear here -->
+    </div>
+
+    <div class="loading-indicator" id="loading">
+      <span class="streaming">Generating response...</span>
+    </div>
+
+    <div class="input-area">
+      <rich-textarea>
+        <div class="ql-editor" 
+             contenteditable="true" 
+             data-placeholder="Enter a prompt here"
+             role="textbox"
+             aria-label="Prompt input"
+             id="prompt-input">
+        </div>
+      </rich-textarea>
+
+      <button class="send-button" 
+              aria-label="Send message" 
+              id="send-button"
+              disabled>
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="test-status">
+    <div><strong>Test Status:</strong></div>
+    <div id="status-text">Waiting for injection...</div>
+    <div id="injected-content"></div>
+  </div>
+
+  <script>
+    // Mock Gemini behavior for E2E testing
+    (function() {
+      const input = document.getElementById('prompt-input');
+      const sendButton = document.getElementById('send-button');
+      const statusText = document.getElementById('status-text');
+      const injectedContent = document.getElementById('injected-content');
+      const testStatus = document.getElementById('test-status');
+      const conversation = document.getElementById('conversation');
+      const loading = document.getElementById('loading');
+
+      // Track injection state
+      window.mockGeminiState = {
+        injected: false,
+        submitted: false,
+        injectedText: '',
+        urlCleaned: false
+      };
+
+      // Enable/disable send button based on content
+      function updateSendButton() {
+        const hasContent = input.textContent.trim().length > 0;
+        sendButton.disabled = !hasContent;
+      }
+
+      // Monitor input for changes
+      input.addEventListener('input', updateSendButton);
+      input.addEventListener('keyup', updateSendButton);
+
+      // Handle send button click
+      sendButton.addEventListener('click', function() {
+        if (sendButton.disabled) return;
+        
+        const text = input.textContent.trim();
+        window.mockGeminiState.submitted = true;
+        window.mockGeminiState.injectedText = text;
+        
+        // Add user message
+        const userMsg = document.createElement('div');
+        userMsg.className = 'message user-message';
+        userMsg.textContent = text;
+        conversation.appendChild(userMsg);
+        
+        // Clear input
+        input.textContent = '';
+        updateSendButton();
+        
+        // Show loading
+        loading.classList.add('visible');
+        
+        // Simulate response after delay
+        setTimeout(() => {
+          loading.classList.remove('visible');
+          const response = document.createElement('div');
+          response.className = 'message model-response';
+          response.textContent = `[Mock Response] Received: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`;
+          conversation.appendChild(response);
+          
+          // Update test status
+          statusText.textContent = '✅ Submitted successfully!';
+          testStatus.classList.add('success');
+        }, 500);
+      });
+
+      // Monitor for content injection (from extension)
+      const observer = new MutationObserver(() => {
+        const content = input.textContent.trim();
+        if (content && !window.mockGeminiState.injected) {
+          window.mockGeminiState.injected = true;
+          window.mockGeminiState.injectedText = content;
+          statusText.textContent = '✅ Text injected!';
+          injectedContent.textContent = content.substring(0, 200) + (content.length > 200 ? '...' : '');
+          testStatus.classList.add('success');
+          updateSendButton();
+        }
+      });
+      observer.observe(input, { childList: true, characterData: true, subtree: true });
+
+      // Check URL params on load
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('bg_prompt')) {
+        statusText.textContent = '📝 bg_prompt detected in URL';
+      }
+
+      // Monitor URL for cleanup
+      let lastUrl = window.location.href;
+      setInterval(() => {
+        if (window.location.href !== lastUrl) {
+          lastUrl = window.location.href;
+          if (!window.location.search.includes('bg_prompt')) {
+            window.mockGeminiState.urlCleaned = true;
+          }
+        }
+      }, 100);
+    })();
+  </script>
+</body>
+</html>
+
