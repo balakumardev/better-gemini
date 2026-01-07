@@ -85,7 +85,7 @@ const CONFIG = {
 
 // Named exports for specific values used by other modules
 const URL_PARAM = 'bg_prompt';
-const DEBUG = true; // Set to false in production
+const DEBUG = false; // Production mode
 
 // Freeze the config to prevent accidental modifications
 Object.freeze(CONFIG);

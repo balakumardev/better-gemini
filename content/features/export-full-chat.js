@@ -31,6 +31,8 @@
       MODEL_RESPONSE: 'model-response .markdown',
       MODEL_RESPONSE_FALLBACK: 'model-response message-content',
       CHAT_CONTAINER: 'chat-window-content',
+      CHAT_TITLE: 'span.conversation-title.gds-title-m',
+      CHAT_TITLE_FALLBACK: 'button.conversation-actions-menu-button span.conversation-title',
     },
 
     // Debug mode
@@ -38,122 +40,163 @@
   };
 
   // ============================================================================
-  // CSS STYLES
+  // CSS STYLES - Google Material Design 3 Native Style
   // ============================================================================
 
   const STYLES = `
+    /* Floating Action Button - Gemini-native dark style */
     #${CONFIG.BUTTON_ID} {
       position: fixed;
       bottom: 24px;
       right: 24px;
       z-index: 9999;
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 12px 20px;
-      background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-      color: #ffffff;
-      border: none;
-      border-radius: 50px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      gap: 10px;
+      height: 48px;
+      padding: 0 20px;
+      background-color: #394457;
+      color: #c2e7ff;
+      border: 1px solid #4a5568;
+      border-radius: 24px;
+      font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
       font-weight: 500;
+      letter-spacing: 0.1px;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4),
-                  0 2px 4px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      opacity: 0.9;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: all 200ms ease;
     }
 
     #${CONFIG.BUTTON_ID}:hover {
-      opacity: 1;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5),
-                  0 4px 8px rgba(0, 0, 0, 0.15);
+      background-color: #4a5a6e;
+      border-color: #5a6a7e;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     }
 
     #${CONFIG.BUTTON_ID}:active {
-      transform: translateY(0);
-      box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+      transform: scale(0.98);
+      background-color: #3a4a5e;
+    }
+
+    #${CONFIG.BUTTON_ID}:focus-visible {
+      outline: 2px solid #8ab4f8;
+      outline-offset: 2px;
     }
 
     #${CONFIG.BUTTON_ID} .export-icon {
       width: 18px;
       height: 18px;
-      fill: currentColor;
+      flex-shrink: 0;
     }
 
     #${CONFIG.BUTTON_ID} .export-label {
       white-space: nowrap;
+      line-height: 1;
     }
 
+    /* Success state */
     #${CONFIG.BUTTON_ID}.success {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+      background-color: #1e4620;
+      color: #81c995;
+      border-color: #2e5a30;
     }
 
+    #${CONFIG.BUTTON_ID}.success:hover {
+      background-color: #2a5a2c;
+    }
+
+    /* Error state */
     #${CONFIG.BUTTON_ID}.error {
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+      background-color: #5c2b29;
+      color: #f28b82;
+      border-color: #7c3b39;
     }
 
-    /* Dropdown menu */
+    #${CONFIG.BUTTON_ID}.error:hover {
+      background-color: #6c3b39;
+    }
+
+    /* Dropdown Menu - Dark theme to match Gemini */
     #${CONFIG.BUTTON_ID}-menu {
       position: fixed;
-      bottom: 80px;
+      bottom: 88px;
       right: 24px;
       z-index: 9998;
-      background: #1e1e2e;
-      border: 1px solid rgba(139, 92, 246, 0.3);
+      min-width: 220px;
+      background-color: #282a2c;
+      border: 1px solid #3c4043;
       border-radius: 12px;
-      padding: 8px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      padding: 8px 0;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4),
+                  0 2px 8px rgba(0, 0, 0, 0.3);
       display: none;
       flex-direction: column;
-      gap: 4px;
-      min-width: 180px;
+      transform-origin: bottom right;
     }
 
     #${CONFIG.BUTTON_ID}-menu.visible {
       display: flex;
-      animation: fadeInUp 0.2s ease-out;
+      animation: menuSlideIn 200ms cubic-bezier(0, 0, 0.2, 1);
     }
 
-    @keyframes fadeInUp {
+    @keyframes menuSlideIn {
       from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: scale(0.92);
       }
       to {
         opacity: 1;
-        transform: translateY(0);
+        transform: scale(1);
       }
     }
 
+    /* Menu Items - Dark theme */
     #${CONFIG.BUTTON_ID}-menu button {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
+      gap: 12px;
+      width: 100%;
+      height: 44px;
+      padding: 0 16px;
       background: transparent;
-      color: #e6edf3;
+      color: #e3e3e3;
       border: none;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 13px;
+      font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 0.1px;
+      text-align: left;
       cursor: pointer;
-      transition: background 0.15s ease;
+      transition: background-color 150ms ease;
     }
 
     #${CONFIG.BUTTON_ID}-menu button:hover {
-      background: rgba(139, 92, 246, 0.2);
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    #${CONFIG.BUTTON_ID}-menu button:active {
+      background-color: rgba(255, 255, 255, 0.12);
     }
 
     #${CONFIG.BUTTON_ID}-menu button svg {
-      width: 16px;
-      height: 16px;
-      fill: currentColor;
-      opacity: 0.8;
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+      color: #8ab4f8;
+    }
+
+    /* Menu divider */
+    #${CONFIG.BUTTON_ID}-menu hr {
+      height: 1px;
+      margin: 8px 0;
+      background-color: rgba(0, 0, 0, 0.12);
+      border: none;
     }
 
     /* Hide button when no chat */
@@ -241,13 +284,49 @@
   }
 
   /**
+   * Gets the chat title from Gemini's UI
+   * @returns {string} The chat title or a fallback
+   */
+  function getChatTitle() {
+    // Try primary selector
+    let titleEl = document.querySelector(CONFIG.SELECTORS.CHAT_TITLE);
+    if (titleEl && titleEl.textContent?.trim()) {
+      return titleEl.textContent.trim();
+    }
+
+    // Try fallback selector
+    titleEl = document.querySelector(CONFIG.SELECTORS.CHAT_TITLE_FALLBACK);
+    if (titleEl && titleEl.textContent?.trim()) {
+      return titleEl.textContent.trim();
+    }
+
+    // Default fallback
+    return 'Gemini Chat';
+  }
+
+  /**
+   * Sanitizes a string for use as a filename
+   * @param {string} str - The string to sanitize
+   * @returns {string} Sanitized string safe for filenames
+   */
+  function sanitizeFilename(str) {
+    return str
+      .replace(/[<>:"/\\|?*]/g, '') // Remove invalid filename characters
+      .replace(/\s+/g, '-')          // Replace spaces with hyphens
+      .replace(/-+/g, '-')           // Collapse multiple hyphens
+      .replace(/^-|-$/g, '')         // Remove leading/trailing hyphens
+      .substring(0, 100);            // Limit length
+  }
+
+  /**
    * Generates a filename based on current date/time and chat title
    */
   function generateFilename() {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-    return `gemini-chat-${dateStr}-${timeStr}.md`;
+    const title = getChatTitle();
+    const sanitizedTitle = sanitizeFilename(title);
+    return `${sanitizedTitle}-${dateStr}.md`;
   }
 
   // ============================================================================
@@ -440,9 +519,10 @@
     }
 
     const lines = [];
+    const chatTitle = getChatTitle();
 
     // Add header
-    lines.push('# Gemini Chat Export');
+    lines.push(`# ${chatTitle}`);
     lines.push(`*Exported on ${new Date().toLocaleString()}*`);
     lines.push('');
     lines.push('---');
@@ -504,9 +584,12 @@
 
     button.innerHTML = `
       <svg class="export-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <span class="export-label">Export Chat</span>
+      <span class="export-label">Export</span>
     `;
 
     button.addEventListener('click', handleExportClick);
@@ -535,13 +618,16 @@
     menu.innerHTML = `
       <button data-action="copy">
         <svg viewBox="0 0 24 24">
-          <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
         </svg>
-        Copy to Clipboard
+        Copy to clipboard
       </button>
       <button data-action="download">
         <svg viewBox="0 0 24 24">
-          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
         </svg>
         Download as .md
       </button>
@@ -847,6 +933,7 @@
       destroy,
       extractFullChat,
       formatChatAsMarkdown,
+      getChatTitle,
     };
   }
 

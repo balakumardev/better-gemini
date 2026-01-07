@@ -4,13 +4,28 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       create_release:
         description: 'Create a GitHub release'
         required: false
-        default: false
-        type: boolean
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      version_bump:
+        description: 'Version bump type (only if creating release)'
+        required: false
+        default: 'none'
+        type: choice
+        options:
+          - 'none'
+          - 'patch'
+          - 'minor'
+          - 'major'
 
 permissions:
   contents: write
@@ -22,21 +37,89 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Bump version (if requested)
+        id: bump
+        if: github.event.inputs.version_bump != 'none' && github.event.inputs.version_bump != ''
+        run: |
+          CURRENT_VERSION=$(jq -r '.version' manifest.json)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          case "${{ github.event.inputs.version_bump }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION"
+
+          # Update manifest.json
+          jq --arg v "$NEW_VERSION" '.version = $v' manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+
+          # Update config.js
+          sed -i "s/version: '[^']*'/version: '$NEW_VERSION'/" config.js
+
+          # Update options.html
+          sed -i "s/Version [0-9]*\.[0-9]*\.[0-9]*/Version $NEW_VERSION/" options/options.html
+
+          # Update popup.html version badge
+          sed -i "s/v[0-9]*\.[0-9]*/v${MAJOR}.${MINOR}/" popup/popup.html
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_bumped=true" >> $GITHUB_OUTPUT
+
+      - name: Commit version bump
+        if: steps.bump.outputs.version_bumped == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add manifest.json config.js options/options.html popup/popup.html
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
+          git push
 
       - name: Extract version and build info
         id: version
         run: |
           VERSION=$(jq -r '.version' manifest.json)
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          BUILD_NAME="better-gemini-v${VERSION}-${SHORT_SHA}"
+          BUILD_NAME="better-gemini-v${VERSION}"
+
+          # Check if this is a tag push
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            IS_TAG="true"
+            TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            IS_TAG="false"
+            TAG_VERSION=""
+          fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "build_name=$BUILD_NAME" >> $GITHUB_OUTPUT
+          echo "is_tag=$IS_TAG" >> $GITHUB_OUTPUT
+          echo "tag_version=$TAG_VERSION" >> $GITHUB_OUTPUT
 
           echo "Extension version: $VERSION"
           echo "Commit SHA: $SHORT_SHA"
           echo "Build name: $BUILD_NAME"
+          echo "Is tag push: $IS_TAG"
 
       - name: Create extension build directory
         run: mkdir -p build
@@ -75,6 +158,8 @@ jobs:
         run: |
           echo "Build contents:"
           find build -type f | sort
+          echo ""
+          echo "Total files: $(find build -type f | wc -l)"
 
       - name: Create ZIP archive
         run: |
@@ -82,26 +167,129 @@ jobs:
           zip -r ../${{ steps.version.outputs.build_name }}.zip .
           cd ..
           echo "Created: ${{ steps.version.outputs.build_name }}.zip"
+          echo "Size: $(du -h ${{ steps.version.outputs.build_name }}.zip | cut -f1)"
           echo ""
           echo "Archive contents:"
           unzip -l ${{ steps.version.outputs.build_name }}.zip
 
+      - name: Generate CRX file
+        run: |
+          # Install crx3 tool
+          npm install -g crx3
+
+          # Generate a temporary key for CRX (for testing/development use)
+          # Note: For production, you should use a persistent key stored as a secret
+          if [ -n "${{ secrets.CRX_PRIVATE_KEY }}" ]; then
+            echo "${{ secrets.CRX_PRIVATE_KEY }}" > key.pem
+            echo "Using stored private key"
+          else
+            openssl genrsa -out key.pem 2048
+            echo "Generated temporary private key (CRX will have different ID each build)"
+          fi
+
+          # Create CRX
+          crx3 pack build -o ${{ steps.version.outputs.build_name }}.crx -p key.pem
+
+          # Clean up key
+          rm -f key.pem
+
+          echo "Created: ${{ steps.version.outputs.build_name }}.crx"
+          echo "Size: $(du -h ${{ steps.version.outputs.build_name }}.crx | cut -f1)"
+
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.version.outputs.build_name }}
+          name: ${{ steps.version.outputs.build_name }}-zip
           path: ${{ steps.version.outputs.build_name }}.zip
           retention-days: 90
 
+      - name: Upload CRX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.build_name }}-crx
+          path: ${{ steps.version.outputs.build_name }}.crx
+          retention-days: 90
+
+      - name: Determine if release should be created
+        id: should_release
+        run: |
+          if [[ "${{ steps.version.outputs.is_tag }}" == "true" ]]; then
+            echo "create_release=true" >> $GITHUB_OUTPUT
+            echo "Release will be created (tag push detected)"
+          elif [[ "${{ github.event.inputs.create_release }}" == "true" ]]; then
+            echo "create_release=true" >> $GITHUB_OUTPUT
+            echo "Release will be created (manual trigger)"
+          else
+            echo "create_release=false" >> $GITHUB_OUTPUT
+            echo "No release will be created"
+          fi
+
+      - name: Create and push tag (if manual release)
+        if: steps.should_release.outputs.create_release == 'true' && steps.version.outputs.is_tag == 'false'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          TAG_NAME="v${{ steps.version.outputs.version }}"
+
+          # Check if tag already exists
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists, skipping tag creation"
+          else
+            git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+            git push origin "$TAG_NAME"
+            echo "Created and pushed tag: $TAG_NAME"
+          fi
+
       - name: Create GitHub Release
-        if: inputs.create_release == true || startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+        if: steps.should_release.outputs.create_release == 'true'
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Better Gemini v${{ steps.version.outputs.version }}
-          files: ${{ steps.version.outputs.build_name }}.zip
+          body: |
+            ## Better Gemini v${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            **Chrome Web Store** (Recommended)
+            Install from the Chrome Web Store for automatic updates.
+
+            **Manual Installation (ZIP)**
+            1. Download `${{ steps.version.outputs.build_name }}.zip`
+            2. Extract the ZIP file
+            3. Go to `chrome://extensions/`
+            4. Enable "Developer mode"
+            5. Click "Load unpacked" and select the extracted folder
+
+            **Manual Installation (CRX)**
+            1. Download `${{ steps.version.outputs.build_name }}.crx`
+            2. Drag and drop the CRX file onto `chrome://extensions/`
+
+            ### What's Included
+            - Wider chat layout (98% width)
+            - Copy as Markdown (per-response MD button)
+            - Export full chat as Markdown
+            - 40+ keyboard shortcuts
+            - Default model selection
+            - Omnibox quick launch (type "gem")
+          files: |
+            ${{ steps.version.outputs.build_name }}.zip
+            ${{ steps.version.outputs.build_name }}.crx
           generate_release_notes: true
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ steps.version.outputs.short_sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ZIP | ${{ steps.version.outputs.build_name }}.zip |" >> $GITHUB_STEP_SUMMARY
+          echo "| CRX | ${{ steps.version.outputs.build_name }}.crx |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release Created | ${{ steps.should_release.outputs.create_release }} |" >> $GITHUB_STEP_SUMMARY

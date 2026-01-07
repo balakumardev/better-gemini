@@ -29,7 +29,7 @@ const modKeyLabel = isMac ? 'Cmd' : 'Ctrl';
 // ========== CONFIGURATION ==========
 const SHORTCUTS_CONFIG = {
   // Debug mode
-  DEBUG: true,
+  DEBUG: false,
 
   // Toast notification settings
   TOAST: {
