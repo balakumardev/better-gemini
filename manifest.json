@@ -43,7 +43,8 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Better Gemini"
+    "default_title": "Better Gemini",
+    "default_popup": "popup/popup.html"
   },
   "options_page": "options/options.html"
 }
