@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Better Gemini",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Enhance Google Gemini with direct launch and power-user features",
   "permissions": [
     "activeTab",
@@ -17,7 +17,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://gemini.google.com/*"],
+      "matches": [
+        "https://gemini.google.com/*"
+      ],
       "js": [
         "content/injector.js",
         "content/features/wider-chat.js",
@@ -49,4 +51,3 @@
   },
   "options_page": "options/options.html"
 }
-
