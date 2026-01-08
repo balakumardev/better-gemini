@@ -14,7 +14,7 @@ const CONFIG = {
   // Extension metadata
   meta: {
     name: 'Better Gemini',
-    version: '1.0.4',
+    version: '1.0.5',
   },
 
   // Timing configuration
