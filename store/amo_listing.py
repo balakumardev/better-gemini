@@ -82,6 +82,10 @@ def req(method, url, *, json_body=None, json_ct=False, filefields=None, data=Non
         if resp.status_code != 429:
             return resp
         wait = _wait_seconds(resp) + 5
+        if wait > 150:  # AMO account write-quota exhausted (Retry-After can be hours) — don't hang
+            print(f"  429: AMO write quota exhausted (Retry-After ~{wait}s ~= {wait // 3600}h{(wait % 3600) // 60}m). "
+                  f"Not sleeping — re-run after the throttle window resets.")
+            sys.exit(2)
         print(f"  429 throttled; sleeping {wait}s (attempt {attempt + 1})")
         time.sleep(wait)
     return resp
