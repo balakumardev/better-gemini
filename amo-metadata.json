@@ -1,0 +1,7 @@
+{
+  "categories": ["other"],
+  "summary": {
+    "en-US": "Make Gemini better: wide 98% chat layout, address-bar quick launch (type 'gem'), one-click Markdown export, 40+ keyboard shortcuts, and a default-model picker. Local-only, no tracking."
+  },
+  "version": { "license": "MIT" }
+}
