@@ -108,13 +108,33 @@
           <div class="setting-item sub-setting" id="modelSelectorContainer">
             <div class="setting-info">
               <label for="selectedModel" class="setting-label">Preferred Model</label>
-              <p class="setting-description">Choose which model to use by default</p>
+              <p class="setting-description">Choose which model to use by default (ignored if your account doesn't offer it)</p>
             </div>
             <div class="select-wrapper">
               <select id="selectedModel" class="model-select">
-                <option value="flash">Flash - Quick answers</option>
+                <option value="flash-lite">Flash-Lite - Fastest</option>
+                <option value="flash">Flash - Quick, all-around</option>
                 <option value="thinking">Thinking - Complex problems</option>
-                <option value="pro">Pro - Advanced math & code</option>
+                <option value="pro">Pro - Advanced math &amp; code</option>
+              </select>
+              <span class="select-arrow">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                  <path d="M2 4l4 4 4-4z"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+
+          <div class="setting-item sub-setting" id="effortSelectorContainer">
+            <div class="setting-info">
+              <label for="selectedEffort" class="setting-label">Thinking Level</label>
+              <p class="setting-description">Reasoning effort to apply, when the chosen model supports it</p>
+            </div>
+            <div class="select-wrapper">
+              <select id="selectedEffort" class="model-select">
+                <option value="">Don't change</option>
+                <option value="standard">Standard - Best for most</option>
+                <option value="extended">Extended - Complex problem solving</option>
               </select>
               <span class="select-arrow">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
@@ -143,7 +163,7 @@
 
     <footer>
       <div class="footer-content">
-        <p class="version">Version 1.0.5</p>
+        <p class="version">Version 1.0.6</p>
         <div class="footer-divider"></div>
         <p class="footer-credit">
           Crafted by <a href="https://balakumar.dev" target="_blank" rel="noopener">Bala Kumar</a>

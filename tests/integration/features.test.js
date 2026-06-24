@@ -502,8 +502,11 @@ describe('Feature System - Integration Tests', () => {
     });
 
     test('handles storage errors gracefully during initialization', async () => {
-      // Make storage.sync.get fail
-      chrome.storage.sync.get.mockRejectedValueOnce(new Error('Storage error'));
+      // loadSettings uses the callback form get(key, cb) inside a try/catch, so
+      // simulate a synchronous failure that the catch block handles (falls back to defaults).
+      chrome.storage.sync.get.mockImplementationOnce(() => {
+        throw new Error('Storage error');
+      });
 
       // Should not throw and should use defaults
       await expect(initializeFeatures()).resolves.not.toThrow();

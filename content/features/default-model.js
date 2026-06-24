@@ -1,14 +1,18 @@
 /**
  * Better Gemini Extension - Default Model Feature
  *
- * This module automatically sets the preferred model for every chat.
- * It watches for page loads and model picker availability, then selects
- * the user's preferred model.
+ * Automatically sets the preferred model AND thinking-effort level on every chat.
+ * It watches for page loads, model-picker availability and SPA navigation, then
+ * selects the user's preferences.
  *
- * Features:
- * - Automatically selects preferred model on new chats
- * - Applies to existing chats when navigating
- * - Handles SPA navigation
+ * Gemini's model picker is volatile, so this module avoids brittle assumptions:
+ *  - Per-option data-test-ids are rotating hashes ("bard-mode-option-<hash>"), not
+ *    stable names, so we match options by the version-agnostic tier NAME instead.
+ *  - Labels carry a version prefix ("3.1 Pro", "3.5 Flash"); the prefix is stripped
+ *    before matching.
+ *  - The lineup varies by account (e.g. "Flash-Lite / Flash / Pro" or
+ *    "Flash / Thinking / Pro"); an unavailable preference simply no-ops.
+ *  - A "Thinking level" submenu (Standard / Extended) controls reasoning effort.
  */
 
 (function() {
@@ -19,74 +23,85 @@
   // ============================================================================
 
   const CONFIG = {
-    // Available models with their identifiers
+    // Model tiers keyed by the value stored in settings. `name` is the stable tier
+    // label we match against (after stripping any version prefix). Matching is
+    // anchored so "Flash" never matches "Flash-Lite" (see nameMatches()).
     MODELS: {
-      flash: {
-        id: '56fdd199312815e2',
-        testId: 'bard-mode-option-flash',
-        name: 'Flash',
-      },
-      fast: {
-        id: '56fdd199312815e2',
-        testId: 'bard-mode-option-flash',
-        name: 'Flash',
-        alias: 'flash', // fast is an alias for flash
-      },
-      thinking: {
-        id: 'e051ce1aa80aa576',
-        testId: 'bard-mode-option-thinking',
-        name: 'Thinking',
-      },
-      pro: {
-        id: 'e6fa609c3fa255c0',
-        testId: 'bard-mode-option-pro',
-        name: 'Pro',
-      },
+      'flash-lite': { name: 'Flash-Lite' },
+      flash:        { name: 'Flash' },
+      fast:         { name: 'Flash', alias: 'flash' }, // "fast" is an alias for Flash
+      thinking:     { name: 'Thinking' },
+      pro:          { name: 'Pro' },
     },
 
-    // Selectors
+    // Thinking-effort levels (the "Thinking level" submenu inside the mode picker).
+    EFFORTS: {
+      standard: { name: 'Standard' },
+      extended: { name: 'Extended' },
+    },
+
     SELECTORS: {
       MODEL_PICKER_BUTTON: '[data-test-id="bard-mode-menu-button"]',
-      MODEL_MENU_PANEL: '.mat-mdc-menu-panel.gds-mode-switch-menu',
-      MODEL_OPTION_BY_TEST_ID: '[data-test-id="bard-mode-option-',
-      MODEL_OPTION_BY_TEXT: '.bard-mode-list-button',
-      CURRENT_MODEL_TEXT: '[data-test-id="bard-mode-menu-button"] .input-area-switch',
+      // Real model options in the open menu. The "bard-mode-option-" prefix excludes
+      // the "Sign in for all models" row and the "Thinking level" submenu trigger.
+      MODEL_OPTION: '[data-test-id^="bard-mode-option-"]',
+      // The "Thinking level" submenu trigger inside the open mode menu.
+      THINKING_LEVEL_ITEM: 'gem-menu-item[value="thinking_level"]',
+      // Visible current-model label inside the picker button.
+      CURRENT_MODEL_LABEL: '.input-area-switch-label',
     },
 
-    // Storage key for the selected model
+    // Storage keys
     STORAGE_KEY: 'betterGemini_defaultModel',
+    STORAGE_KEY_EFFORT: 'betterGemini_thinkingLevel',
 
     // Timing
     RETRY_DELAY: 500,
     MAX_RETRIES: 10,
-    MENU_OPEN_DELAY: 150,
+    MENU_OPEN_DELAY: 120,   // poll interval while waiting for a (sub)menu to render
+    MENU_OPEN_TRIES: 12,    // ~1.4s max wait for a menu to open
 
     // Debug mode
     DEBUG: false,
   };
 
   // ============================================================================
-  // LOGGING UTILITIES
+  // UTILITIES
   // ============================================================================
 
   function log(message, data = null) {
     if (CONFIG.DEBUG) {
       const prefix = '[Better Gemini Default Model]';
-      if (data !== null) {
-        console.log(prefix, message, data);
-      } else {
-        console.log(prefix, message);
-      }
+      if (data !== null) console.log(prefix, message, data);
+      else console.log(prefix, message);
     }
   }
 
   function logError(message, error = null) {
     const prefix = '[Better Gemini Default Model Error]';
-    if (error) {
-      console.error(prefix, message, error);
-    } else {
-      console.error(prefix, message);
-    }
+    if (error) console.error(prefix, message, error);
+    else console.error(prefix, message);
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function escapeRe(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Strips a leading version token ("3.1 ", "3.5 ") from a label.
+  function stripVersionPrefix(text) {
+    return String(text || '').replace(/^\s*\d+(?:\.\d+)*\s+/, '').trim();
+  }
+
+  // True if `label` names `name` as its leading tier, NOT followed by a hyphen or
+  // word character. This is what keeps "Flash" from matching "Flash-Lite" while
+  // still matching "Flash All-around help" (and "Flash-Lite" matching itself).
+  function nameMatches(label, name) {
+    const stripped = stripVersionPrefix(label).toLowerCase();
+    return new RegExp('^' + escapeRe(name.toLowerCase()) + '(?![-\\w])').test(stripped);
   }
 
   // ============================================================================
@@ -94,6 +109,7 @@
   // ============================================================================
 
   let currentPreferredModel = null;
+  let currentPreferredEffort = null;
   let isApplying = false;
   let observer = null;
   let lastAppliedUrl = null;
@@ -104,14 +120,13 @@
   // ============================================================================
 
   /**
-   * Gets the model from URL query parameter if present
-   * @returns {string|null} Model key (fast, thinking, pro) or null
+   * Gets the model from URL query parameter if present.
+   * @returns {string|null} Model key or null
    */
   function getModelFromUrl() {
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const model = urlParams.get('model');
-
       if (model && CONFIG.MODELS[model]) {
         log('Model from URL param:', model);
         return model;
@@ -123,15 +138,13 @@
   }
 
   /**
-   * Removes the model param from URL without triggering navigation
-   * This keeps the URL clean after we've applied the model
+   * Removes the model param from the URL without triggering navigation.
    */
   function cleanModelFromUrl() {
     try {
       const url = new URL(window.location.href);
       if (url.searchParams.has('model')) {
         url.searchParams.delete('model');
-        // Use replaceState to update URL without navigation
         history.replaceState(null, '', url.toString());
         log('Cleaned model param from URL');
       }
@@ -144,37 +157,40 @@
   // STORAGE
   // ============================================================================
 
-  /**
-   * Loads the preferred model from storage
-   * @returns {Promise<string|null>} Model key (fast, thinking, pro) or null
-   */
-  async function loadPreferredModel() {
+  async function loadFromStorage(key) {
     try {
       if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-        const result = await chrome.storage.sync.get(CONFIG.STORAGE_KEY);
-        return result[CONFIG.STORAGE_KEY] || null;
+        const result = await chrome.storage.sync.get(key);
+        return result[key] || null;
       }
     } catch (error) {
-      logError('Failed to load preferred model', error);
+      logError('Failed to load ' + key, error);
     }
     return null;
   }
 
   /**
-   * Sets up storage change listener
+   * Sets up a storage change listener for both the model and effort preferences.
+   * Changing a preference re-applies immediately to the current tab.
    */
   function setupStorageListener() {
     if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
       chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName === 'sync' && changes[CONFIG.STORAGE_KEY]) {
-          const newModel = changes[CONFIG.STORAGE_KEY].newValue;
-          log('Preferred model changed:', newModel);
-          currentPreferredModel = newModel;
-
-          // Apply the new model immediately
-          if (newModel) {
-            applyDefaultModel();
-          }
+        if (areaName !== 'sync') return;
+        let changed = false;
+        if (changes[CONFIG.STORAGE_KEY]) {
+          currentPreferredModel = changes[CONFIG.STORAGE_KEY].newValue || null;
+          changed = true;
+        }
+        if (changes[CONFIG.STORAGE_KEY_EFFORT]) {
+          currentPreferredEffort = changes[CONFIG.STORAGE_KEY_EFFORT].newValue || null;
+          changed = true;
+        }
+        if (changed) {
+          log('Preferences changed', { model: currentPreferredModel, effort: currentPreferredEffort });
+          // Allow re-application even though the URL hasn't changed.
+          lastAppliedUrl = null;
+          waitAndApplyModel();
         }
       });
     }
@@ -185,35 +201,44 @@
   // ============================================================================
 
   /**
-   * Gets the currently selected model
-   * @returns {string|null} Model key or null
+   * Gets the currently selected model key, or null if unknown.
    */
   function getCurrentModel() {
-    const buttonText = document.querySelector(CONFIG.SELECTORS.CURRENT_MODEL_TEXT);
-    if (!buttonText) return null;
+    const button = document.querySelector(CONFIG.SELECTORS.MODEL_PICKER_BUTTON);
+    if (!button) return null;
 
-    const text = buttonText.textContent?.trim().toLowerCase();
+    // Prefer the accessible name ("Open mode picker, currently Flash"), then the
+    // visible label element, then the button's raw text content.
+    let text = (button.getAttribute('aria-label') || '').match(/currently\s+(.+)$/i)?.[1];
+    if (!text) {
+      const label = button.querySelector(CONFIG.SELECTORS.CURRENT_MODEL_LABEL);
+      text = (label || button).textContent;
+    }
+    text = (text || '').trim();
+    if (!text) return null;
 
     for (const [key, model] of Object.entries(CONFIG.MODELS)) {
-      if (model.name.toLowerCase() === text) {
-        return key;
-      }
+      if (model.alias) continue; // only reverse-map to canonical keys
+      if (nameMatches(text, model.name)) return key;
     }
-
     return null;
   }
 
-  /**
-   * Checks if the model picker is available on the page
-   * @returns {boolean}
-   */
   function isModelPickerAvailable() {
     return !!document.querySelector(CONFIG.SELECTORS.MODEL_PICKER_BUTTON);
   }
 
   /**
-   * Opens the model picker menu
-   * @returns {Promise<boolean>} True if menu opened successfully
+   * Whether the model picker menu is open (options visible). Keyed off the option
+   * elements themselves so it never depends on a panel class.
+   */
+  function isModelMenuOpen() {
+    return !!document.querySelector(CONFIG.SELECTORS.MODEL_OPTION);
+  }
+
+  /**
+   * Opens the model picker menu, polling until the options render.
+   * @returns {Promise<boolean>}
    */
   async function openModelPicker() {
     const pickerButton = document.querySelector(CONFIG.SELECTORS.MODEL_PICKER_BUTTON);
@@ -221,25 +246,42 @@
       log('Model picker button not found');
       return false;
     }
+    if (isModelMenuOpen()) return true;
 
-    // Check if already open
-    if (document.querySelector(CONFIG.SELECTORS.MODEL_MENU_PANEL)) {
-      return true;
-    }
-
-    // Click to open
     pickerButton.click();
-
-    // Wait for menu to appear
-    await new Promise(resolve => setTimeout(resolve, CONFIG.MENU_OPEN_DELAY));
-
-    return !!document.querySelector(CONFIG.SELECTORS.MODEL_MENU_PANEL);
+    for (let i = 0; i < CONFIG.MENU_OPEN_TRIES; i++) {
+      await sleep(CONFIG.MENU_OPEN_DELAY);
+      if (isModelMenuOpen()) return true;
+    }
+    return isModelMenuOpen();
   }
 
   /**
-   * Selects a model from the open menu
-   * @param {string} modelKey - The model key (flash, fast, thinking, pro)
-   * @returns {boolean} True if selection was successful
+   * Finds the menu option element for a model key (menu must be open).
+   */
+  function findModelOption(modelKey) {
+    const model = CONFIG.MODELS[modelKey];
+    if (!model) return null;
+
+    const options = Array.from(document.querySelectorAll(CONFIG.SELECTORS.MODEL_OPTION));
+    let option = options.find(opt => nameMatches(opt.textContent || '', model.name));
+
+    // Fallback for UI variants: role-based menu items, excluding the sign-in row
+    // and the "Thinking level" submenu trigger.
+    if (!option) {
+      const items = document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]');
+      option = Array.from(items).find(opt => {
+        const t = (opt.textContent || '').toLowerCase();
+        if (t.includes('sign in') || t.includes('thinking level')) return false;
+        return nameMatches(opt.textContent || '', model.name);
+      });
+    }
+    return option || null;
+  }
+
+  /**
+   * Selects a model from the open menu.
+   * @returns {boolean} True if an option was found and clicked.
    */
   function selectModel(modelKey) {
     const model = CONFIG.MODELS[modelKey];
@@ -247,57 +289,120 @@
       logError('Unknown model:', modelKey);
       return false;
     }
-
-    // Use the canonical key (handle aliases like fast->flash)
-    const canonicalKey = model.alias || modelKey;
-
-    // Try by data-test-id first
-    let selector = `${CONFIG.SELECTORS.MODEL_OPTION_BY_TEST_ID}${canonicalKey}"]`;
-    let option = document.querySelector(selector);
-
-    // If not found, try finding by text content
+    const option = findModelOption(modelKey);
     if (!option) {
-      log('Model option not found by test-id, trying text match:', selector);
-      const allOptions = document.querySelectorAll('[role="menuitemradio"]');
-      for (const opt of allOptions) {
-        const text = opt.textContent?.toLowerCase() || '';
-        if (text.includes(model.name.toLowerCase())) {
-          option = opt;
-          break;
-        }
-      }
-    }
-
-    if (!option) {
-      logError('Model option not found:', modelKey);
+      logError('Model option not found (account may not offer it):', modelKey);
       return false;
     }
-
     option.click();
     log('Selected model:', model.name);
-
-    // Close the menu after selection (sometimes it stays open)
-    setTimeout(() => {
-      closeModelPicker();
-    }, 100);
-
     return true;
   }
 
   /**
-   * Closes the model picker if open
+   * Closes the model picker if open.
    */
   function closeModelPicker() {
-    const menu = document.querySelector(CONFIG.SELECTORS.MODEL_MENU_PANEL);
-    if (menu) {
-      // Press Escape to close
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      // Also try clicking outside to close
-      setTimeout(() => {
-        const overlay = document.querySelector('.cdk-overlay-backdrop');
-        if (overlay) overlay.click();
-      }, 50);
+    if (!isModelMenuOpen()) return;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    setTimeout(() => {
+      const overlay = document.querySelector('.cdk-overlay-backdrop');
+      if (overlay) overlay.click();
+      else if (isModelMenuOpen()) document.body.click();
+    }, 50);
+  }
+
+  // ============================================================================
+  // THINKING-LEVEL (EFFORT) DETECTION & SELECTION
+  // ============================================================================
+
+  /**
+   * Finds the "Thinking level" submenu trigger inside the open mode menu.
+   */
+  function findThinkingLevelItem() {
+    const byValue = document.querySelector(CONFIG.SELECTORS.THINKING_LEVEL_ITEM);
+    if (byValue) return byValue;
+    // Fallback by text if the `value` attribute changes.
+    return Array.from(document.querySelectorAll('gem-menu-item, [role="menuitem"]'))
+      .find(el => /thinking level/i.test(el.textContent || '')) || null;
+  }
+
+  /**
+   * Reads the currently-selected effort from the "Thinking level X" label.
+   * The mode menu must be open. Returns an effort key or null.
+   */
+  function getCurrentEffortFromMenu() {
+    const item = findThinkingLevelItem();
+    if (!item) return null;
+    const after = (item.textContent || '').replace(/^\s*thinking level/i, '').trim();
+    for (const [key, effort] of Object.entries(CONFIG.EFFORTS)) {
+      if (nameMatches(after, effort.name)) return key;
     }
+    return null;
+  }
+
+  /**
+   * Finds an effort option inside the open thinking-level submenu.
+   */
+  function findEffortOption(effortKey) {
+    const effort = CONFIG.EFFORTS[effortKey];
+    if (!effort) return null;
+    const items = Array.from(document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]'));
+    return items.find(el => {
+      const t = (el.textContent || '').trim();
+      if (/thinking level/i.test(t)) return false; // exclude the parent trigger
+      return new RegExp('^' + escapeRe(effort.name.toLowerCase()) + '(?![-\\w])').test(t.toLowerCase());
+    }) || null;
+  }
+
+  /**
+   * Applies the preferred thinking-effort level. Opens its own menu session
+   * (model selection closes the menu). No-ops gracefully when the control is
+   * absent for the current model/account.
+   * @returns {Promise<boolean>} True if already correct or successfully changed.
+   */
+  async function applyEffort(effortKey) {
+    const effort = CONFIG.EFFORTS[effortKey];
+    if (!effort) return false;
+
+    if (!(await openModelPicker())) {
+      log('Could not open menu to set effort');
+      return false;
+    }
+    await sleep(50);
+
+    const trigger = findThinkingLevelItem();
+    if (!trigger) {
+      log('Thinking level control not present; skipping effort');
+      closeModelPicker();
+      return false;
+    }
+
+    if (getCurrentEffortFromMenu() === effortKey) {
+      log('Effort already set to', effortKey);
+      closeModelPicker();
+      return true;
+    }
+
+    // Expand the submenu, then wait for the effort options to render.
+    if (trigger.getAttribute('aria-expanded') !== 'true') {
+      trigger.click();
+    }
+    let option = null;
+    for (let i = 0; i < CONFIG.MENU_OPEN_TRIES; i++) {
+      await sleep(CONFIG.MENU_OPEN_DELAY);
+      option = findEffortOption(effortKey);
+      if (option) break;
+    }
+    if (!option) {
+      logError('Effort option not found:', effortKey);
+      closeModelPicker();
+      return false;
+    }
+    option.click();
+    log('Selected effort:', effort.name);
+    setTimeout(closeModelPicker, 100);
+    return true;
   }
 
   // ============================================================================
@@ -305,94 +410,80 @@
   // ============================================================================
 
   /**
-   * Gets the effective model to apply (URL override takes precedence)
-   * @returns {string|null} Model key to apply
+   * The model to apply (URL override takes precedence over the stored preference).
    */
   function getEffectiveModel() {
-    // URL param takes precedence
-    if (urlModelOverride) {
-      return urlModelOverride;
-    }
-    // Fall back to stored preference
+    if (urlModelOverride) return urlModelOverride;
     return currentPreferredModel;
   }
 
   /**
-   * Applies the default model if different from current
-   * @returns {Promise<boolean>} True if model was changed
+   * Applies the preferred model and thinking-effort level if needed.
+   * @returns {Promise<boolean>} True if anything was changed.
    */
-  async function applyDefaultModel() {
+  async function applyDefaults() {
     const targetModel = getEffectiveModel();
+    const targetEffort = currentPreferredEffort;
 
-    if (!targetModel) {
-      log('No model to apply (no URL override or preferred model)');
+    if (!targetModel && !targetEffort) {
+      log('Nothing to apply (no preferred model or effort)');
       return false;
     }
-
     if (isApplying) {
-      log('Already applying model, skipping');
+      log('Already applying, skipping');
       return false;
     }
-
     if (!isModelPickerAvailable()) {
       log('Model picker not available yet');
       return false;
     }
 
-    // Check if we already applied for this URL (only for non-URL-override cases)
     const currentUrl = window.location.href;
     if (!urlModelOverride && lastAppliedUrl === currentUrl) {
       log('Already applied for this URL');
       return false;
     }
 
-    const currentModel = getCurrentModel();
-    log('Current model:', currentModel, 'Target:', targetModel, 'From URL:', !!urlModelOverride);
-
-    if (currentModel === targetModel) {
-      log('Already using target model');
-      lastAppliedUrl = currentUrl;
-      // Clean URL param if it was from URL
-      if (urlModelOverride) {
-        cleanModelFromUrl();
-        urlModelOverride = null;
-      }
-      return false;
-    }
-
     isApplying = true;
+    let didSomething = false;
 
     try {
-      // Open the model picker
-      const opened = await openModelPicker();
-      if (!opened) {
-        logError('Failed to open model picker');
-        return false;
+      // 1) Model — only touch the picker when a change is actually needed.
+      if (targetModel && CONFIG.MODELS[targetModel]) {
+        const currentModel = getCurrentModel();
+        log('Model current/target:', currentModel, targetModel);
+        if (currentModel !== targetModel) {
+          if (await openModelPicker()) {
+            await sleep(50);
+            if (selectModel(targetModel)) {
+              didSomething = true;
+              await sleep(300); // let Gemini commit the selection (closes the menu)
+            }
+            closeModelPicker();
+            await sleep(200);
+          } else {
+            logError('Failed to open model picker');
+          }
+        }
       }
 
-      // Small delay to ensure menu is fully rendered
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      // Select the model
-      const selected = selectModel(targetModel);
-      if (!selected) {
-        closeModelPicker();
-        return false;
+      // 2) Thinking-effort level — separate menu session.
+      if (targetEffort && CONFIG.EFFORTS[targetEffort]) {
+        if (await applyEffort(targetEffort)) didSomething = true;
+        await sleep(150);
       }
 
       lastAppliedUrl = currentUrl;
-      log('Successfully applied model:', targetModel);
+      log('Applied defaults', { model: targetModel, effort: targetEffort, changed: didSomething });
 
-      // Clean URL param after successful application
       if (urlModelOverride) {
         cleanModelFromUrl();
         urlModelOverride = null;
       }
-
-      return true;
+      return didSomething;
 
     } catch (error) {
-      logError('Error applying default model', error);
+      logError('Error applying defaults', error);
       closeModelPicker();
       return false;
     } finally {
@@ -400,23 +491,23 @@
     }
   }
 
+  // Back-compat alias.
+  const applyDefaultModel = applyDefaults;
+
   /**
-   * Waits for model picker to be available and applies default model
-   * @param {number} retries - Number of retries remaining
+   * Waits for the model picker to be available, then applies the defaults.
    */
   async function waitAndApplyModel(retries = CONFIG.MAX_RETRIES) {
     if (retries <= 0) {
       log('Max retries reached, giving up');
       return;
     }
-
-    if (!currentPreferredModel) {
-      log('No preferred model configured');
+    if (!currentPreferredModel && !currentPreferredEffort) {
+      log('No preferences configured');
       return;
     }
-
     if (isModelPickerAvailable()) {
-      await applyDefaultModel();
+      await applyDefaults();
     } else {
       log('Model picker not ready, retrying...', retries - 1);
       setTimeout(() => waitAndApplyModel(retries - 1), CONFIG.RETRY_DELAY);
@@ -427,13 +518,9 @@
   // NAVIGATION OBSERVER
   // ============================================================================
 
-  /**
-   * Sets up observer for SPA navigation
-   */
   function setupNavigationObserver() {
     let lastUrl = window.location.href;
 
-    // Watch for URL changes via history API
     const originalPushState = history.pushState;
     history.pushState = function() {
       originalPushState.apply(history, arguments);
@@ -448,7 +535,6 @@
 
     window.addEventListener('popstate', handleNavigation);
 
-    // Also observe DOM changes for model picker appearance
     observer = new MutationObserver((mutations) => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastUrl) {
@@ -457,7 +543,7 @@
         return;
       }
 
-      // Check if model picker just appeared
+      // Re-apply when the model picker button (re)appears.
       for (const mutation of mutations) {
         if (mutation.type === 'childList') {
           for (const node of mutation.addedNodes) {
@@ -474,18 +560,12 @@
       }
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
 
     function handleNavigation() {
       log('Navigation detected');
-      // Reset last applied URL to allow re-application
       lastAppliedUrl = null;
-      // Check for new URL model override
       urlModelOverride = getModelFromUrl();
-      // Wait for page to settle then apply
       setTimeout(() => waitAndApplyModel(), 500);
     }
 
@@ -496,53 +576,40 @@
   // INITIALIZATION
   // ============================================================================
 
-  /**
-   * Destroys the feature
-   */
   function destroy() {
     if (observer) {
       observer.disconnect();
       observer = null;
     }
     currentPreferredModel = null;
+    currentPreferredEffort = null;
     urlModelOverride = null;
     isApplying = false;
     lastAppliedUrl = null;
     log('Default model feature destroyed');
   }
 
-  /**
-   * Initializes the default model feature
-   */
   async function init() {
     log('Initializing Default Model feature');
 
-    // Only run in browser context
     if (typeof window === 'undefined' || typeof document === 'undefined') {
       logError('Not in browser context, skipping initialization');
       return;
     }
-
-    // Check if we're on a Gemini page
     if (!window.location.hostname.includes('gemini.google.com')) {
       log('Not on Gemini, skipping initialization');
       return;
     }
 
-    // Check for URL model override first
     urlModelOverride = getModelFromUrl();
-    if (urlModelOverride) {
-      log('URL model override:', urlModelOverride);
-    }
+    if (urlModelOverride) log('URL model override:', urlModelOverride);
 
-    // Load the preferred model from storage
-    currentPreferredModel = await loadPreferredModel();
-    log('Loaded preferred model:', currentPreferredModel);
+    currentPreferredModel = await loadFromStorage(CONFIG.STORAGE_KEY);
+    currentPreferredEffort = await loadFromStorage(CONFIG.STORAGE_KEY_EFFORT);
+    log('Loaded preferences', { model: currentPreferredModel, effort: currentPreferredEffort });
 
-    // Set up storage listener for changes
     setupStorageListener();
 
-    // Wait for DOM to be ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initializeFeature);
     } else {
@@ -550,16 +617,9 @@
     }
   }
 
-  /**
-   * Internal initialization after DOM is ready
-   */
   function initializeFeature() {
-    // Set up navigation observer
     setupNavigationObserver();
-
-    // Apply model after page loads
     setTimeout(() => waitAndApplyModel(), 1000);
-
     log('Default Model feature initialized');
   }
 
@@ -573,7 +633,10 @@
       destroy,
       CONFIG,
       getCurrentModel,
+      applyDefaults,
       applyDefaultModel,
+      nameMatches,
+      stripVersionPrefix,
     };
   }
 
@@ -582,11 +645,16 @@
       init,
       destroy,
       getCurrentModel,
+      applyDefaults,
       applyDefaultModel,
+      applyEffort,
       getModelFromUrl,
-      // Expose for debugging
+      // Exposed for debugging / testing
       getPreferredModel: () => currentPreferredModel,
       setPreferredModel: (model) => { currentPreferredModel = model; },
+      getPreferredEffort: () => currentPreferredEffort,
+      setPreferredEffort: (effort) => { currentPreferredEffort = effort; },
+      getCurrentEffortFromMenu,
       getUrlOverride: () => urlModelOverride,
       setUrlOverride: (model) => { urlModelOverride = model; },
     };

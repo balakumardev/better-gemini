@@ -272,8 +272,8 @@
   function initializeFeatures() {
     log('Starting feature initialization...');
 
-    // Load settings
-    loadSettings().then(function(settings) {
+    // Load settings (return the promise so callers can await initialization)
+    return loadSettings().then(function(settings) {
       // Initialize features based on settings
       if (settings.exportMarkdown !== false) {
         initExportMarkdown();

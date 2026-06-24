@@ -58,16 +58,20 @@ describe('Feature Loader - Unit Tests', () => {
     test('has all features enabled by default', () => {
       expect(DEFAULT_SETTINGS).toEqual({
         exportMarkdown: true,
+        exportFullChat: true,
         keyboardShortcuts: true,
         widerChatWidth: true,
+        defaultModel: true,
       });
     });
 
-    test('includes all three features', () => {
-      expect(Object.keys(DEFAULT_SETTINGS)).toHaveLength(3);
+    test('includes all features', () => {
+      expect(Object.keys(DEFAULT_SETTINGS)).toHaveLength(5);
       expect(DEFAULT_SETTINGS).toHaveProperty('exportMarkdown');
+      expect(DEFAULT_SETTINGS).toHaveProperty('exportFullChat');
       expect(DEFAULT_SETTINGS).toHaveProperty('keyboardShortcuts');
       expect(DEFAULT_SETTINGS).toHaveProperty('widerChatWidth');
+      expect(DEFAULT_SETTINGS).toHaveProperty('defaultModel');
     });
   });
 
@@ -101,8 +105,11 @@ describe('Feature Loader - Unit Tests', () => {
     });
 
     test('returns default settings on storage error', async () => {
-      // Make storage.sync.get throw an error
-      chrome.storage.sync.get.mockRejectedValueOnce(new Error('Storage error'));
+      // loadSettings uses the callback form get(key, cb) inside a try/catch, so
+      // simulate a synchronous failure that the catch block handles.
+      chrome.storage.sync.get.mockImplementationOnce(() => {
+        throw new Error('Storage error');
+      });
 
       const settings = await loadSettings();
 
@@ -124,7 +131,7 @@ describe('Feature Loader - Unit Tests', () => {
     test('calls chrome.storage.sync.get with correct key', async () => {
       await loadSettings();
 
-      expect(chrome.storage.sync.get).toHaveBeenCalledWith(STORAGE_KEY);
+      expect(chrome.storage.sync.get).toHaveBeenCalledWith(STORAGE_KEY, expect.any(Function));
     });
   });
 
