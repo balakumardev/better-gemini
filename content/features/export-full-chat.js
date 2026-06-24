@@ -327,6 +327,16 @@
       return titleEl.textContent.trim();
     }
 
+    // Fallback: derive from the document title. On the redesigned UI the in-page
+    // title selectors are unreliable (the sidebar has one title per chat), but the
+    // tab title reflects the *current* conversation, e.g. "My Chat - Google Gemini".
+    const docTitle = (document.title || '')
+      .replace(/\s*[-–|]\s*Google Gemini\s*$/i, '')
+      .trim();
+    if (docTitle && docTitle.toLowerCase() !== 'gemini') {
+      return docTitle;
+    }
+
     // Default fallback
     return 'Gemini Chat';
   }

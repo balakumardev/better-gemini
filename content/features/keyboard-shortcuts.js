@@ -45,8 +45,10 @@ const SHORTCUTS_CONFIG = {
 
   // DOM Selectors for Gemini UI
   SELECTORS: {
-    // New chat button
+    // New chat button (redesign: it is now an <a>, not a <button>)
     NEW_CHAT: [
+      'a[href="/app"][aria-label*="New chat"]',
+      '[aria-label="New chat"]',
       'button[aria-label*="New chat"]',
       'button[data-test-id="new-chat"]',
       'a[href="/app"]',
@@ -59,11 +61,11 @@ const SHORTCUTS_CONFIG = {
       'button[data-testid="send-button"]',
     ],
 
-    // Sidebar toggle
+    // Sidebar toggle (redesign: labels are now "Open sidebar"/"Close sidebar")
     SIDEBAR_TOGGLE: [
+      'button[aria-label*="sidebar"]',
       '[aria-label*="Hide side panel"]',
       '[aria-label*="Show side panel"]',
-      'button[aria-label*="sidebar"]',
       '[data-test-id="sidebar-toggle"]',
     ],
 
@@ -88,11 +90,13 @@ const SHORTCUTS_CONFIG = {
       '.code-block',
     ],
 
-    // Text input field
+    // Text input field — the focusable element is the contenteditable itself;
+    // `.text-input-field` is now a non-focusable wrapper, so it must not be first.
     TEXT_INPUT: [
-      '.text-input-field',
-      'div[contenteditable="true"]',
+      'div[contenteditable="true"].ql-editor',
       'rich-textarea div[contenteditable="true"]',
+      'div[contenteditable="true"]',
+      '.text-input-field',
       '[data-placeholder="Enter a prompt here"]',
     ],
 
@@ -127,17 +131,19 @@ const SHORTCUTS_CONFIG = {
       '[data-test-id="share-button"]',
     ],
 
-    // Audio controls
+    // Audio controls (redesign: the TTS button is now labelled "Listen")
     AUDIO_PLAY: [
+      'button[aria-label*="Listen"]',
       'button[aria-label*="Play"]',
       'button[aria-label*="Pause"]',
       '[data-test-id="audio-toggle"]',
     ],
 
-    // Voice input button
+    // Voice input button (redesign: label is "Microphone" — case matters for *=)
     VOICE_INPUT: [
-      'button[aria-label*="voice"]',
+      'button[aria-label*="Microphone"]',
       'button[aria-label*="microphone"]',
+      'button[aria-label*="voice"]',
       '[data-test-id="voice-input"]',
     ],
 

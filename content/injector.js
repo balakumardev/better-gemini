@@ -535,6 +535,11 @@ async function main() {
     return;
   }
 
+  // Strip bg_prompt from the URL now (before the conversation is created). The
+  // redesigned Gemini SPA router otherwise propagates the param into sidebar
+  // links, so cleaning up only after sending leaves stale ?bg_prompt= links.
+  cleanupURL();
+
   try {
     // Step 3: Wait for the input field to appear
     log('Waiting for Gemini interface to load...');
