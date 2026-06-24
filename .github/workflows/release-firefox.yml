@@ -62,8 +62,24 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add firefox/manifest.json firefox/config.js firefox/popup/popup.html
           git commit -m "firefox v${{ steps.version.outputs.VERSION }} [skip ci]" || echo "nothing to commit"
-          git tag "firefox-v${{ steps.version.outputs.VERSION }}"
-          git push origin HEAD:main --tags
+          # Push to main with rebase + retry so a concurrent push from the Chrome
+          # build pipeline (both run on the same push) can't make this fail before
+          # the AMO submit step below.
+          pushed=
+          for i in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              pushed=1; break
+            fi
+            echo "main push attempt $i rejected (concurrent push?); retrying shortly..."
+            sleep $((RANDOM % 5 + 3))
+          done
+          if [ -z "$pushed" ]; then
+            echo "::error::failed to push firefox version bump to main after 5 attempts"
+            exit 1
+          fi
+          # Tag the commit now on main (force-safe for manual re-runs).
+          git tag -f "firefox-v${{ steps.version.outputs.VERSION }}"
+          git push origin -f "refs/tags/firefox-v${{ steps.version.outputs.VERSION }}"
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v2

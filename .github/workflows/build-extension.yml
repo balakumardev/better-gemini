@@ -89,7 +89,17 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add manifest.json config.js options/options.html popup/popup.html
           git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
-          git push
+          # Push with rebase + retry so a concurrent push from the Firefox release
+          # pipeline (both run on the same push to main) can't make this fail.
+          for i in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "push attempt $i rejected (concurrent push?); retrying shortly..."
+            sleep $((RANDOM % 5 + 3))
+          done
+          echo "::error::failed to push version bump to main after 5 attempts"
+          exit 1
 
       - name: Extract version and build info
         id: version
