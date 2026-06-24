@@ -1,11 +1,12 @@
 /**
  * Better Gemini Extension - Export Full Chat Feature
  *
- * This module adds a floating "Export Chat" button at the bottom right of the page
- * that exports the entire conversation (user messages + assistant responses) as markdown.
+ * This module adds a floating "Export Chat" button that floats just above the
+ * chat input and exports the entire conversation (user messages + assistant
+ * responses) as markdown.
  *
  * Features:
- * - Floating button at bottom right corner
+ * - Floating button anchored above the chat input (clears Gemini's controls)
  * - Exports complete conversation as markdown
  * - Handles SPA navigation
  * - Download as .md file or copy to clipboard
@@ -35,6 +36,31 @@
       CHAT_TITLE_FALLBACK: 'button.conversation-actions-menu-button span.conversation-title',
     },
 
+    // Floating button positioning — float ABOVE the chat input rather than
+    // over the model selector / send / stop controls in the bottom-right.
+    POSITION: {
+      // Gemini's bottom input region, tried in priority order (first visible wins).
+      INPUT_REGION_SELECTORS: [
+        '.input-area-container',
+        '.bottom-container',
+        'input-container',
+        '.input-area',
+      ],
+      // Fallback: locate the prompt editor, then walk up to its container.
+      INPUT_EDITOR_SELECTORS: [
+        'rich-textarea',
+        '.ql-editor',
+        '[contenteditable="true"]',
+        'textarea',
+        '[aria-label*="prompt" i]',
+      ],
+      GAP_ABOVE_INPUT: 12,   // px between the button's bottom edge and the input region's top
+      FALLBACK_BOTTOM: 120,  // px from viewport bottom when the input region can't be found
+      MIN_BOTTOM: 72,        // never sit lower than this (keeps clear of the controls)
+      BUTTON_HEIGHT: 48,     // matches the CSS height; used to stack the menu above the button
+      MENU_GAP: 8,           // px between the button's top edge and the menu
+    },
+
     // Debug mode
     DEBUG: false,
   };
@@ -47,7 +73,8 @@
     /* Floating Action Button - Gemini-native dark style */
     #${CONFIG.BUTTON_ID} {
       position: fixed;
-      bottom: 24px;
+      /* Default offset; JS refines this to sit just above the chat input. */
+      bottom: 120px;
       right: 24px;
       z-index: 9999;
       display: inline-flex;
@@ -120,7 +147,7 @@
     /* Dropdown Menu - Dark theme to match Gemini */
     #${CONFIG.BUTTON_ID}-menu {
       position: fixed;
-      bottom: 88px;
+      bottom: 176px;
       right: 24px;
       z-index: 9998;
       min-width: 220px;
@@ -652,6 +679,7 @@
   function showMenu() {
     const menu = document.getElementById(`${CONFIG.BUTTON_ID}-menu`);
     if (menu) {
+      repositionButton();
       menu.classList.add('visible');
     }
   }
@@ -672,6 +700,7 @@
   function toggleMenu() {
     const menu = document.getElementById(`${CONFIG.BUTTON_ID}-menu`);
     if (menu) {
+      repositionButton();
       menu.classList.toggle('visible');
     }
   }
@@ -756,8 +785,95 @@
 
     if (hasChat) {
       button.classList.remove('hidden');
+      repositionButton();
     } else {
       button.classList.add('hidden');
+    }
+  }
+
+  // ============================================================================
+  // POSITIONING — float the button ABOVE the chat input (not over the controls)
+  // ============================================================================
+
+  let inputRegionResizeObserver = null;
+  let observedInputRegion = null;
+
+  /**
+   * Finds Gemini's bottom input region so the button can float just above it.
+   * Tries known container selectors first, then falls back to locating the
+   * prompt editor and walking up to a sensibly-sized ancestor.
+   * @returns {HTMLElement|null}
+   */
+  function findInputRegion() {
+    for (const selector of CONFIG.POSITION.INPUT_REGION_SELECTORS) {
+      const el = document.querySelector(selector);
+      if (el && el.getBoundingClientRect().height > 0) {
+        return el;
+      }
+    }
+
+    for (const selector of CONFIG.POSITION.INPUT_EDITOR_SELECTORS) {
+      const editor = document.querySelector(selector);
+      if (!editor) continue;
+      let node = editor;
+      for (let i = 0; i < 6 && node; i++) {
+        const r = node.getBoundingClientRect();
+        if (r.height > 0 && r.width > 200) {
+          return node;
+        }
+        node = node.parentElement;
+      }
+      return editor;
+    }
+
+    return null;
+  }
+
+  /**
+   * Watches the input region's size so the button stays put when the input
+   * grows/shrinks (multi-line prompts, attachments).
+   * @param {HTMLElement} region
+   */
+  function observeInputRegion(region) {
+    if (!region || region === observedInputRegion) return;
+    if (typeof ResizeObserver === 'undefined') return;
+
+    if (inputRegionResizeObserver) {
+      inputRegionResizeObserver.disconnect();
+    }
+    observedInputRegion = region;
+    inputRegionResizeObserver = new ResizeObserver(() => repositionButton());
+    inputRegionResizeObserver.observe(region);
+  }
+
+  /**
+   * Positions the floating button (and its menu) just above Gemini's input
+   * region, clamped so it never drops onto the controls or flies off-screen.
+   * Falls back to a safe fixed offset when the input region isn't found.
+   */
+  function repositionButton() {
+    const button = document.getElementById(CONFIG.BUTTON_ID);
+    if (!button) return;
+    const menu = document.getElementById(`${CONFIG.BUTTON_ID}-menu`);
+    const P = CONFIG.POSITION;
+
+    let bottomOffset = P.FALLBACK_BOTTOM;
+    const region = findInputRegion();
+    if (region) {
+      const r = region.getBoundingClientRect();
+      if (r.height > 0 && r.top < window.innerHeight) {
+        bottomOffset = Math.round(window.innerHeight - r.top + P.GAP_ABOVE_INPUT);
+      }
+      observeInputRegion(region);
+    }
+
+    // Clamp: stay clear of the bottom controls, but never push off the top.
+    const maxBottom = Math.max(P.MIN_BOTTOM, window.innerHeight - 120);
+    bottomOffset = Math.min(Math.max(bottomOffset, P.MIN_BOTTOM), maxBottom);
+
+    button.style.bottom = `${bottomOffset}px`;
+    if (menu) {
+      menu.style.bottom = `${bottomOffset + P.BUTTON_HEIGHT + P.MENU_GAP}px`;
     }
   }
 
@@ -838,6 +954,14 @@
 
     // Remove event listeners
     document.removeEventListener('click', handleDocumentClick);
+    window.removeEventListener('resize', repositionButton);
+
+    // Stop watching the input region
+    if (inputRegionResizeObserver) {
+      inputRegionResizeObserver.disconnect();
+      inputRegionResizeObserver = null;
+    }
+    observedInputRegion = null;
 
     // Remove UI elements
     const button = document.getElementById(CONFIG.BUTTON_ID);
@@ -904,6 +1028,9 @@
     // Handle clicks outside menu
     document.addEventListener('click', handleDocumentClick);
 
+    // Keep the button floating above the input as the window/input resizes
+    window.addEventListener('resize', repositionButton);
+
     // Delay initial visibility check to ensure page is loaded
     setTimeout(updateButtonVisibility, 1000);
 
@@ -922,6 +1049,8 @@
       extractFullChat,
       formatChatAsMarkdown,
       convertHtmlToMarkdown,
+      repositionButton,
+      findInputRegion,
       CONFIG,
     };
   }
@@ -934,6 +1063,8 @@
       extractFullChat,
       formatChatAsMarkdown,
       getChatTitle,
+      repositionButton,
+      findInputRegion,
     };
   }
 
