@@ -96,7 +96,7 @@ test.describe('Extension Loading', () => {
     const manifest = JSON.parse(content);
 
     // Core manifest validation
-    expect(manifest.name).toBe('Better Gemini');
+    expect(manifest.name).toBe('Better Gemini: Wide Chat, Keyboard Shortcuts, Markdown Export');
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.version).toMatch(/^\d+\.\d+\.\d+$/);
 
@@ -133,7 +133,6 @@ test.describe('Extension Loading', () => {
     // Required permissions
     expect(manifest.permissions).toBeDefined();
     expect(manifest.permissions).toContain('activeTab');
-    expect(manifest.permissions).toContain('scripting');
     expect(manifest.permissions).toContain('storage');
 
     // Host permissions

@@ -3,14 +3,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Chrome Extension](https://img.shields.io/badge/Manifest-V3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 
-A Chrome extension that enables direct launching of Google Gemini queries from the browser address bar.
+A Chrome extension that adds a wider chat, keyboard shortcuts, Markdown export, a default model setting, and address-bar launch to Google Gemini.
 
 ## Features
 
-- **Omnibox Integration**: Type `gem` followed by your prompt to launch directly into Gemini
-- **Smart Prompt Injection**: Auto-submits your prompt in Gemini's input field
-- **Tab Control**: Open in current tab, new tab, or background tab
-- **Unicode Support**: Full support for special characters, emoji, and international text
+- **Wide chat and tables**: The conversation, your messages, the prompt box, and tables use up to 98% of the available width
+- **Omnibox quick launch**: Type `gem` followed by your prompt to launch directly into Gemini, with the prompt auto-submitted. Open it in the current tab, a new tab, or a background tab. Supports special characters, emoji, and international text
+- **Export full chat**: An Export button above the prompt box copies the whole conversation as Markdown or downloads it as a `.md` file
+- **20+ keyboard shortcuts**: New chat, sidebar toggle, chat switching, copy last response or code block, and more. Press `Cmd/Ctrl+Shift+?` on Gemini to see the full list
+- **Default model and thinking level**: Pick the model and thinking level that new chats start with, from the options page. A choice your account does not offer is skipped
+
+The wide chat, export, keyboard shortcuts, and default model features each have an on/off switch in the popup and the options page.
 
 ## Installation
 
@@ -84,9 +87,9 @@ All settings are centralized in `config.js`:
 
 ## Permissions
 
-- `activeTab`: Access current tab for script injection
-- `scripting`: Programmatic script injection
-- `storage`: User preferences
+- `activeTab`: Declared so the omnibox quick launch can open Gemini in the current tab
+- `storage`: Saves your settings (feature switches, preferred model, thinking level) with `chrome.storage.sync`
+- Host access to `https://gemini.google.com/*`: The content scripts run only on Gemini pages
 
 ## License
 

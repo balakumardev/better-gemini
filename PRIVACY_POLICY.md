@@ -1,6 +1,6 @@
 # Privacy Policy for Better Gemini
 
-**Last Updated:** January 7, 2026
+**Last Updated:** October 17, 2026
 
 ## Overview
 
@@ -12,27 +12,27 @@ Better Gemini ("the Extension") is a browser extension that enhances your Google
 
 ### What We DO NOT Collect
 
-- **Conversations:** We never read, store, or transmit your Gemini conversations
+- **Conversations:** We do not collect, store, or transmit your Gemini conversations. The Extension reads conversation text inside the page only when you use a copy or export feature. That text is not stored or transmitted.
 - **Personal Information:** No names, emails, or identifying information
 - **Usage Analytics:** No tracking, analytics, or telemetry
 - **Browsing History:** No monitoring of your browsing activity
 - **Credentials:** No access to your Google account credentials
 
-### What We Store Locally
+### What We Store
 
-The Extension stores the following data **locally on your device only** using Chrome's built-in storage API:
+The Extension saves your settings using Chrome's built-in storage API (`chrome.storage.sync`). Chrome may sync these settings across the browsers you are signed in to. The Extension itself sends no data to the developer or to any third party.
 
 | Data | Purpose |
 |------|---------|
-| Feature toggle preferences | Remember which features you've enabled/disabled |
-| Default model selection | Remember your preferred Gemini model |
-| UI preferences | Remember your layout and display preferences |
+| Feature switches | Remember which features you've turned on or off |
+| Preferred model | Remember the Gemini model to select in new chats |
+| Thinking level | Remember the thinking level to select in new chats |
 
 This data:
-- Never leaves your device
-- Is not transmitted to any server
-- Is not accessible to us or any third party
-- Can be cleared by uninstalling the extension or clearing browser data
+- Is saved with Chrome's storage API, and Chrome may sync it across the browsers you are signed in to
+- Is not sent by the Extension to the developer or to any third party
+- Is not accessible to the developer
+- Can be cleared by uninstalling the extension or clearing browser data (synced copies follow your browser's sync settings)
 
 ## Permissions Explained
 
@@ -40,9 +40,8 @@ The Extension requires the following permissions:
 
 | Permission | Why It's Needed |
 |------------|-----------------|
-| `activeTab` | To apply UI enhancements to the Gemini page you're viewing |
-| `scripting` | To inject the features (wider layout, shortcuts, etc.) into Gemini |
-| `storage` | To save your preferences locally on your device |
+| `activeTab` | The permission the Extension declares so the address-bar quick launch (type `gem`) can open Gemini in the current tab |
+| `storage` | To save your settings with Chrome's storage API (Chrome may sync them across your signed-in browsers) |
 | `host_permissions` (gemini.google.com) | To run only on Google Gemini pages |
 
 ## Third-Party Services
@@ -55,10 +54,10 @@ The Extension does not:
 
 ## Data Security
 
-Since all data is stored locally on your device:
-- Your data is protected by your device's security
-- No data transmission means no risk of interception
-- No server-side storage means no risk of data breaches on our end
+Since the Extension keeps only your settings and sends no data to the developer or any third party:
+- Your settings are protected by your browser and device security
+- The Extension transmits no data, so there is nothing for it to expose in transit
+- There is no developer-run server storage, so no risk of data breaches on our end
 
 ## Children's Privacy
 
@@ -87,8 +86,8 @@ If you have any questions about this Privacy Policy, please open an issue on our
 | Question | Answer |
 |----------|--------|
 | Do you collect my data? | No |
-| Do you read my conversations? | No |
+| Do you read my conversations? | Only inside the page, when you use a copy or export feature. Not stored or transmitted |
 | Do you use analytics? | No |
 | Do you share data with third parties? | No |
-| Where is my data stored? | Only on your device |
+| Where is my data stored? | Only your settings, in your browser's storage. Chrome may sync them across your signed-in browsers |
 | Can I delete my data? | Yes, uninstall or clear browser data |
