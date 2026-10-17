@@ -59,11 +59,31 @@ describe('Wider Chat Feature - Unit Tests', () => {
       expect(WIDER_CHAT_CSS).toContain('user-query');
     });
 
+    test('WIDER_CHAT_CSS lifts the fixed max-width on table blocks', () => {
+      // Gemini wraps each table in `table-block .table-block`, which carries its
+      // own fixed pixel max-width (692px) that the container rule cannot reach.
+      const tableRule = WIDER_CHAT_CSS.match(/table-block\s+\.table-block\s*\{([^}]*)\}/);
+      expect(tableRule).not.toBeNull();
+      expect(tableRule[1]).toMatch(/max-width:\s*100%\s*!important/);
+    });
+
+    test('table rule keeps the container-relative cap instead of removing it', () => {
+      // `none` would let an over-wide table blow out its block instead of
+      // scrolling inside it, so the override must stay container-relative.
+      const tableRule = WIDER_CHAT_CSS.match(/table-block\s+\.table-block\s*\{([^}]*)\}/);
+      expect(tableRule[1]).not.toMatch(/max-width:\s*none/);
+    });
+
+    test('table selectors use the stable element name, not hashed classes', () => {
+      expect(WIDER_CHAT_CSS).not.toMatch(/ng-tns-c|_ngcontent|ng-c\d|data-test-id/);
+    });
+
     test('WATCHED_SELECTORS contains expected values', () => {
       expect(WATCHED_SELECTORS).toContain('.conversation-container');
       expect(WATCHED_SELECTORS).toContain('.input-area-container');
       expect(WATCHED_SELECTORS).toContain('.bottom-container');
       expect(WATCHED_SELECTORS).toContain('user-query');
+      expect(WATCHED_SELECTORS).toContain('table-block');
     });
   });
 
@@ -133,6 +153,12 @@ describe('Wider Chat Feature - Unit Tests', () => {
 
     test('returns true for user-query element', () => {
       document.body.innerHTML = '<user-query></user-query>';
+
+      expect(hasWatchedElements()).toBe(true);
+    });
+
+    test('returns true for table-block element', () => {
+      document.body.innerHTML = '<table-block></table-block>';
 
       expect(hasWatchedElements()).toBe(true);
     });

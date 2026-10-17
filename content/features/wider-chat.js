@@ -5,6 +5,7 @@
  *
  * Features:
  * - Injects CSS to set max-width to 98% on conversation containers
+ * - Lifts the fixed max-width on table blocks so tables widen with the text
  * - Uses MutationObserver to handle dynamically loaded content
  * - Persists styles across SPA navigation
  *
@@ -22,12 +23,22 @@ const IS_BROWSER_ENV_WIDER = typeof window !== 'undefined' && typeof document !=
 
 const STYLE_ID = 'better-gemini-wider-chat';
 
+// Gemini's table component (<table-block>) wraps each table in a div that
+// carries its own fixed pixel max-width (692px in the legacy layout). That
+// cap sits below .conversation-container, so widening the container leaves
+// tables narrow while the surrounding text is wide. Swap the fixed cap for a
+// container-relative one: the table fills the widened chat, while a table
+// that is genuinely wider still scrolls inside its own scroll container.
 const WIDER_CHAT_CSS = `
 .conversation-container,
 .input-area-container,
 .bottom-container,
 user-query {
   max-width: 98% !important;
+}
+
+table-block .table-block {
+  max-width: 100% !important;
 }
 `;
 
@@ -37,6 +48,7 @@ const WATCHED_SELECTORS = [
   '.input-area-container',
   '.bottom-container',
   'user-query',
+  'table-block',
 ];
 
 // ========== STATE ==========
