@@ -26,7 +26,16 @@
     SELECTORS: {
       RESPONSE_CONTAINER: '.response-container',
       BUTTONS_CONTAINER: '.buttons-container-v2',
-      COPY_BUTTON: '[data-test-id="copy-button"]',
+      // Gemini's per-response copy control, most stable first. The <copy-button>
+      // element name does not depend on the UI language or on build-generated
+      // ids; the aria-label match is the English-UI fallback (exact match, so the
+      // code block's "Copy code" and a table's "Copy table" never qualify); the
+      // data-test-id is what older Gemini layouts carried.
+      COPY_BUTTON_CANDIDATES: [
+        'copy-button',
+        'button[aria-label="Copy"]',
+        '[data-test-id="copy-button"]',
+      ],
       MARKDOWN_CONTENT: '.model-response-text .markdown',
       RESPONSE_CONTENT: '.response-content',
     },
@@ -119,6 +128,23 @@
   }
 
   /**
+   * Reads the language Gemini prints in a code block's header ("Python", "C++"),
+   * for code elements that carry no language-* class. Returns '' when the header
+   * has no single-word label (e.g. "Code snippet").
+   * @param {HTMLElement} pre - The <pre> inside a <code-block>
+   * @returns {string} Lowercased language token or ''
+   */
+  function getCodeBlockLanguageLabel(pre) {
+    const block = pre.closest('code-block');
+    if (!block) return '';
+    const labelEl = Array.from(block.querySelectorAll('span')).find(span =>
+      !pre.contains(span) && !span.closest('button, gem-icon-button') && span.textContent.trim()
+    );
+    const label = labelEl ? labelEl.textContent.trim() : '';
+    return /^[\w#+.-]{1,30}$/.test(label) ? label.toLowerCase() : '';
+  }
+
+  /**
    * Converts HTML elements to markdown format
    * @param {HTMLElement} element - The element to convert
    * @returns {string} Markdown text
@@ -167,6 +193,13 @@
             return processChildren(children);
           }
           return `\`${processChildren(children)}\``;
+        case 'code-block': {
+          // Gemini wraps each <pre> in a header (language label plus download and
+          // copy buttons). That text is not part of the code, and emitting it would
+          // glue the label onto the opening fence ("Python```").
+          const pre = node.querySelector('pre');
+          return pre ? processNode(pre) : processChildren(children);
+        }
         case 'pre': {
           // Find the code element and language
           const codeEl = node.querySelector('code');
@@ -177,6 +210,9 @@
             if (langClass) {
               lang = langClass.replace('language-', '');
             }
+          }
+          if (!lang) {
+            lang = getCodeBlockLanguageLabel(node);
           }
           const codeContent = codeEl ? codeEl.textContent : node.textContent;
           return `\`\`\`${lang}\n${codeContent.trim()}\n\`\`\`\n\n`;
@@ -260,32 +296,54 @@
   // COPY MARKDOWN BUTTON
   // ============================================================================
 
+  function createElement(tag, className) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    return el;
+  }
+
   /**
-   * Creates a "Copy MD" button that matches Gemini's style
+   * Creates a "Copy MD" button that matches Gemini's native icon buttons.
+   *
+   * It reuses the Material icon-button classes Gemini's own action buttons carry,
+   * so the hover/focus/ripple state layer comes from Gemini's stylesheet, and pins
+   * the 32px circular size and the icon colour the native row uses. Built with DOM
+   * calls only: this repo avoids innerHTML on gemini.google.com (Trusted Types CSP).
    * @returns {HTMLButtonElement}
    */
   function createCopyMdButton() {
-    const button = document.createElement('button');
-    button.className = `${CONFIG.BUTTON_CLASS} mdc-button mat-mdc-button-base mat-mdc-tooltip-trigger icon-button mat-mdc-button mat-unthemed`;
-    button.setAttribute('tabindex', '0');
+    const button = createElement(
+      'button',
+      `${CONFIG.BUTTON_CLASS} mdc-icon-button mat-mdc-icon-button mat-mdc-button-base mat-unthemed`
+    );
+    button.type = 'button';
     button.setAttribute('aria-label', 'Copy as Markdown');
-    button.setAttribute('mattooltip', 'Copy as Markdown');
+    button.setAttribute('title', 'Copy as Markdown');
     button.setAttribute('data-test-id', 'copy-md-button');
+    button.style.cssText = [
+      'display: flex',
+      'align-items: center',
+      'justify-content: center',
+      'box-sizing: border-box',
+      'flex: 0 0 auto',
+      'width: 32px',
+      'height: 32px',
+      'padding: 4px',
+      'color: var(--lumi-sys-color--on-surface, var(--gem-sys-color--on-surface, currentColor))',
+    ].join('; ');
 
-    // Create the button content structure
-    button.innerHTML = `
-      <span class="mat-mdc-button-persistent-ripple mdc-button__ripple"></span>
-      <span class="copy-md-label" style="font-size: 12px; font-weight: 500; letter-spacing: 0.5px;">MD</span>
-      <span class="mdc-button__label"></span>
-      <span class="mat-focus-indicator"></span>
-      <span class="mat-mdc-button-touch-target"></span>
-    `;
+    const label = createElement('span', 'copy-md-label');
+    label.textContent = 'MD';
+    label.style.cssText = [
+      'font: 600 11px/20px "Google Sans Text", "Google Sans", Roboto, Arial, sans-serif',
+      'letter-spacing: 0.3px',
+    ].join('; ');
 
-    // Add some custom styling
-    button.style.cssText = `
-      min-width: 36px !important;
-      padding: 0 8px !important;
-    `;
+    button.append(
+      createElement('span', 'mat-mdc-button-persistent-ripple mdc-icon-button__ripple'),
+      label,
+      createElement('span', 'mat-focus-indicator')
+    );
 
     return button;
   }
@@ -342,6 +400,39 @@
   }
 
   /**
+   * Finds Gemini's copy control inside a response's action row (or the response
+   * itself when the row's class name has changed).
+   * @param {Element} scope
+   * @returns {Element|null}
+   */
+  function findCopyControl(scope) {
+    for (const selector of CONFIG.SELECTORS.COPY_BUTTON_CANDIDATES) {
+      const match = scope.querySelector(selector);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  /**
+   * Returns the element our button should be inserted after: the copy control's
+   * outermost wrapper that is still a direct child of the action row, so the new
+   * button becomes a sibling of the native buttons rather than nesting inside the
+   * <copy-button> host.
+   * @param {Element} copyControl
+   * @param {Element|null} row - the action row, when it was found
+   * @returns {Element}
+   */
+  function getInsertionAnchor(copyControl, row) {
+    let anchor = copyControl.closest('copy-button') || copyControl;
+    if (row && row !== anchor && row.contains(anchor)) {
+      while (anchor.parentElement && anchor.parentElement !== row) {
+        anchor = anchor.parentElement;
+      }
+    }
+    return anchor;
+  }
+
+  /**
    * Adds the Copy MD button to a response container if not already present
    * @param {HTMLElement} responseContainer
    */
@@ -351,24 +442,20 @@
       return;
     }
 
-    const buttonsContainer = responseContainer.querySelector(CONFIG.SELECTORS.BUTTONS_CONTAINER);
-    if (!buttonsContainer) {
-      log('No buttons container found in response');
+    // The action row only exists once the response has finished rendering.
+    const row = responseContainer.querySelector(CONFIG.SELECTORS.BUTTONS_CONTAINER);
+    const copyControl = findCopyControl(row || responseContainer);
+    if (!copyControl) {
+      log('No copy control found in response');
       return;
     }
 
-    const copyButton = buttonsContainer.querySelector(CONFIG.SELECTORS.COPY_BUTTON);
-    if (!copyButton) {
-      log('No copy button found in response');
-      return;
-    }
-
-    // Create and insert our button after the copy button
+    // Create and insert our button after the copy control
     const copyMdButton = createCopyMdButton();
     copyMdButton.addEventListener('click', handleCopyMdClick);
 
-    // Insert after the copy button
-    copyButton.parentNode.insertBefore(copyMdButton, copyButton.nextSibling);
+    const anchor = getInsertionAnchor(copyControl, row);
+    anchor.parentNode.insertBefore(copyMdButton, anchor.nextSibling);
 
     log('Added Copy MD button to response');
   }
@@ -387,6 +474,30 @@
   // ============================================================================
 
   let observer = null;
+  let scanTimer = null;
+
+  /**
+   * Queues one scan of all responses; calls made while a scan is already queued
+   * are folded into it. Tracked so destroy() can cancel it.
+   * @param {number} delay - ms to wait so Gemini finishes rendering the node
+   */
+  function scheduleScan(delay) {
+    if (scanTimer) return;
+    scanTimer = setTimeout(() => {
+      scanTimer = null;
+      addCopyMdButtonsToAllResponses();
+    }, delay);
+  }
+
+  /**
+   * Anything whose arrival can mean a response just became ready for a button:
+   * the response itself, its action row, or the copy control (the row can be
+   * added before its buttons are).
+   */
+  function getWatchedSelector() {
+    const { RESPONSE_CONTAINER, BUTTONS_CONTAINER, COPY_BUTTON_CANDIDATES } = CONFIG.SELECTORS;
+    return [RESPONSE_CONTAINER, BUTTONS_CONTAINER, ...COPY_BUTTON_CANDIDATES].join(', ');
+  }
 
   /**
    * Sets up MutationObserver to watch for new responses
@@ -396,6 +507,8 @@
       observer.disconnect();
     }
 
+    const watched = getWatchedSelector();
+
     observer = new MutationObserver((mutations) => {
       let shouldScan = false;
 
@@ -403,10 +516,8 @@
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
           for (const node of mutation.addedNodes) {
             if (node.nodeType === Node.ELEMENT_NODE) {
-              // Check if this is a response container or contains one
-              if (node.matches?.(CONFIG.SELECTORS.RESPONSE_CONTAINER) ||
-                  node.querySelector?.(CONFIG.SELECTORS.RESPONSE_CONTAINER) ||
-                  node.querySelector?.(CONFIG.SELECTORS.BUTTONS_CONTAINER)) {
+              // The added node can be the match itself or contain one
+              if (node.matches?.(watched) || node.querySelector?.(watched)) {
                 shouldScan = true;
                 break;
               }
@@ -417,8 +528,7 @@
       }
 
       if (shouldScan) {
-        // Debounce the scan
-        setTimeout(addCopyMdButtonsToAllResponses, 100);
+        scheduleScan(100);
       }
     });
 
@@ -438,10 +548,15 @@
    * Removes all Copy MD buttons and cleans up
    */
   function destroy() {
-    // Disconnect observer
+    // Disconnect observer and drop any scan that was still queued, so a pending
+    // scan cannot put buttons back after the feature is turned off
     if (observer) {
       observer.disconnect();
       observer = null;
+    }
+    if (scanTimer) {
+      clearTimeout(scanTimer);
+      scanTimer = null;
     }
 
     // Remove all Copy MD buttons
@@ -489,7 +604,7 @@
     setupObserver();
 
     // Add buttons to existing responses (with delay to ensure page is loaded)
-    setTimeout(addCopyMdButtonsToAllResponses, 1000);
+    scheduleScan(1000);
 
     log('Copy as Markdown feature initialized');
   }
