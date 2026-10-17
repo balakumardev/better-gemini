@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Better Gemini: Wide UI, Quick Launch, Export",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Wider chat and tables, 20+ keyboard shortcuts, Markdown export, default model, and 'gem' address-bar launch for Google Gemini.",
   "browser_specific_settings": {
     "gecko": {
