@@ -2,57 +2,54 @@
 
 ## Store Listing Details
 
-### Extension Name
+### Extension Name (75 characters max; the store shows the manifest `name`)
 ```
-Better Gemini
+Better Gemini: Wide Chat, Keyboard Shortcuts, Markdown Export
 ```
 
-### Short Description (132 characters max)
+### Short Description (132 characters max; the store shows the manifest `description`)
 ```
-Supercharge Google Gemini with wider chat, keyboard shortcuts, Markdown export, and auto model selection. Power-user features for AI.
+Wider chat and tables, 20+ keyboard shortcuts, Markdown export, default model, and 'gem' address-bar launch for Google Gemini.
 ```
 
 ### Detailed Description (Plain text, no Markdown/HTML)
 ```
-Better Gemini transforms your Google Gemini experience with powerful features that serious AI users have been asking for.
+Better Gemini adds missing controls to gemini.google.com. It runs only on Gemini pages, and each feature has its own on/off switch.
 
-FEATURES:
+FEATURES
 
-Wider Chat Layout
-Expands the narrow default chat width to use 98% of your screen. No more squinting at tiny columns - enjoy full-width responses, especially for code and tables. Inspired by Wide Gemini X.
+Wide chat and tables
+Gemini can keep replies in a narrow column. Better Gemini lets the conversation, your messages, the prompt box and tables use up to 98% of the available width, so wide tables and code are easier to read. Where Gemini already shows chats at full width, the change is smaller.
 
-Export as Markdown
-One-click "MD" button on every response to copy it as properly formatted Markdown. Export entire conversations with a floating button - download as .md files or copy to clipboard instantly.
+Quick launch from the address bar
+Type gem in the address bar, press Tab or Space, type your prompt and press Enter. Gemini opens with the prompt already sent. Enter uses the current tab. Alt+Enter (Option+Enter on Mac) opens a new tab. Ctrl+Enter (Cmd+Enter on Mac) opens a background tab.
 
-Power-User Keyboard Shortcuts
-40+ keyboard shortcuts for the Gemini power user:
-- Cmd/Ctrl+Shift+O: New chat
-- Cmd/Ctrl+B: Toggle sidebar
-- Cmd/Ctrl+Shift+C: Copy last response
-- Cmd/Ctrl+Shift+;: Copy last code block
-- Alt+1-9: Quick-switch between chats
-- Press Cmd/Ctrl+Shift+? to see all shortcuts
+20+ keyboard shortcuts
+Press Cmd+Shift+? (Ctrl+Shift+? on Windows and Linux) on Gemini to see the full list. Examples:
+- Cmd/Ctrl+Shift+O: new chat
+- Cmd/Ctrl+B: show or hide the sidebar
+- Alt+1 to Alt+9: open the 1st to 9th chat in the sidebar
+- Cmd/Ctrl+Shift+;: copy the last code block
+- Cmd/Ctrl+Shift+C: copy the last response
+- Cmd/Ctrl+Shift+K: stop or start generation
+- Shift+Esc: focus the prompt box
 
-Default Model Selection
-Automatically switch to your preferred model (Flash, Thinking, or Pro) on every chat. No more manually selecting your favorite model each time.
+Export a full chat
+An Export button sits above the prompt box. Click it to copy the whole conversation as Markdown or download it as a .md file named after the chat.
 
-Omnibox Quick Launch
-Type "gem" in your address bar, press Tab, then type your prompt. Hit Enter to launch Gemini with your query pre-filled and auto-submitted.
+Default model and thinking level
+Choose a preferred model (Flash-Lite, Flash, Thinking or Pro) and a thinking level (Standard or Extended) on the options page. Better Gemini selects them when a chat opens. A choice your account does not offer is skipped.
 
-PRIVACY FIRST:
-- No data collection
-- No external servers
-- All settings stored locally in your browser
-- Open source on GitHub
+PRIVACY
+- Runs only on gemini.google.com.
+- No analytics, no tracking, no ads, and no data sent to the developer.
+- Your prompts and replies are read only inside the page, when you use a copy or export feature. They are not stored or sent anywhere.
+- Your settings (feature switches, preferred model, thinking level) are saved with Chrome's storage API. Chrome can sync them across the browsers you are signed in to.
+- Source code (MIT license): https://github.com/balakumardev/better-gemini
 
-PERMISSIONS EXPLAINED:
-- activeTab: To inject features into the Gemini page you're viewing
-- scripting: To add UI elements like the Export button and shortcuts
-- storage: To save your preferences locally
+Better Gemini is an independent project. It is not affiliated with or endorsed by Google. Gemini is a trademark of Google LLC.
 
-Works exclusively on gemini.google.com - this extension only activates on Google Gemini.
-
-Built by Bala Kumar | balakumar.dev
+Built by Bala Kumar (balakumar.dev)
 ```
 
 ### Category
@@ -69,16 +66,22 @@ English
 
 ## Permission Justifications
 
+Manifest today: permissions `["activeTab", "storage"]`, host_permissions `["https://gemini.google.com/*"]`, omnibox keyword `gem`.
+
+**Single purpose:** Add reading, navigation and export tools to the Google Gemini website: wider chat, keyboard shortcuts, Markdown export, a default model setting and address-bar launch.
+
 | Permission | Justification |
 |------------|---------------|
-| `activeTab` | Required to inject content scripts into the current Gemini tab when the user interacts. This is the most privacy-respecting way to access page content - it only works on the active tab when triggered by user action. |
-| `scripting` | Required to programmatically inject CSS and JS for features like wider chat layout, floating export button, and keyboard shortcuts. Cannot be avoided for content script functionality. |
-| `storage` | Required to persist user preferences (which features are enabled, default model choice) across browser sessions using chrome.storage.sync. No external servers - all data stays in the browser. |
+| `storage` | Saves the user's settings (which features are on, preferred model, thinking level) with chrome.storage.sync. Nothing else is stored. |
+| `https://gemini.google.com/*` (host permission) | The content scripts run only on Gemini pages. They widen the layout, add the Export button, handle shortcuts and select the default model. The extension has no access to any other site. |
+| `activeTab` | Declared for the address-bar quick launch (type `gem`), which opens Gemini in the current tab. The content scripts are declared statically in the manifest and do not depend on it. |
+| Omnibox keyword `gem` | Needs no permission. It opens `https://gemini.google.com/app?bg_prompt=<text>` through chrome.tabs.update / tabs.create. |
 
-### Host Permission
-| Host | Justification |
-|------|---------------|
-| `https://gemini.google.com/*` | The extension only works on Google Gemini. This narrow scope means it cannot access any other websites, protecting user privacy. |
+The extension does not declare `scripting`. Do not claim it in the listing, README or privacy policy.
+
+**Remote code:** No. All JavaScript is in the package.
+
+**Privacy practices tab** (check the console wizard wording yourself): no data is transmitted off the device. The export and copy features read conversation text inside the page when the user clicks, and keep it local. If the wizard counts local reading of "Website content" as handling, declare it and say it is not transmitted. Certify: no selling, no unrelated use, no creditworthiness use. Keep the existing privacy policy URL; the policy text was updated on 2026-10-17.
 
 ---
 
@@ -89,7 +92,7 @@ English
 - `icons/icon48.png` - 48x48 px (extensions page)
 - `icons/icon128.png` - 128x128 px (Chrome Web Store)
 
-### Screenshots Needed (1280x800 or 640x400)
+### Screenshots (1280x800, min 1, max 5)
 Create screenshots showing:
 1. **Wider Chat** - Before/after comparison of chat width
 2. **Export Button** - Floating "Export Chat" button in action
@@ -99,7 +102,6 @@ Create screenshots showing:
 
 ### Promotional Images (Optional but Recommended)
 - Small tile: 440x280 px
-- Large tile: 920x680 px
 - Marquee: 1400x560 px
 
 ---
@@ -132,7 +134,7 @@ zip -r better-gemini-v1.0.0.zip . \
 1. Click "New Item"
 2. Upload the ZIP file created in step 1
 3. Fill in the store listing:
-   - **Name**: Better Gemini
+   - **Name**: Better Gemini: Wide Chat, Keyboard Shortcuts, Markdown Export
    - **Summary**: Use the short description above
    - **Description**: Use the detailed description above
    - **Category**: Productivity
@@ -152,7 +154,7 @@ Fill out the privacy section:
 - **Data Usage**:
   - Does not collect user data
   - Does not transmit data to external servers
-  - All storage is local to the browser
+  - Settings only, saved with chrome.storage.sync (Chrome may sync them across the user's signed-in browsers)
 
 ### 6. Distribution
 

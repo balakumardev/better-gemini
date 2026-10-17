@@ -35,7 +35,7 @@
 </head>
 <body>
     <h1>Privacy Policy for Better Gemini</h1>
-    <p class="updated"><strong>Last Updated:</strong> January 7, 2026</p>
+    <p class="updated"><strong>Last Updated:</strong> October 17, 2026</p>
 
     <h2>Overview</h2>
     <p>Better Gemini ("the Extension") is a browser extension that enhances your Google Gemini experience with UI improvements and productivity features. We are committed to protecting your privacy and being transparent about our data practices.</p>
@@ -48,37 +48,36 @@
 
     <h3>What We DO NOT Collect</h3>
     <ul>
-        <li><strong>Conversations:</strong> We never read, store, or transmit your Gemini conversations</li>
+        <li><strong>Conversations:</strong> We do not collect, store, or transmit your Gemini conversations. The Extension reads conversation text inside the page only when you use a copy or export feature. That text is not stored or transmitted.</li>
         <li><strong>Personal Information:</strong> No names, emails, or identifying information</li>
         <li><strong>Usage Analytics:</strong> No tracking, analytics, or telemetry</li>
         <li><strong>Browsing History:</strong> No monitoring of your browsing activity</li>
         <li><strong>Credentials:</strong> No access to your Google account credentials</li>
     </ul>
 
-    <h3>What We Store Locally</h3>
-    <p>The Extension stores the following data <strong>locally on your device only</strong> using Chrome's built-in storage API:</p>
+    <h3>What We Store</h3>
+    <p>The Extension saves your settings using Chrome's built-in storage API (<code>chrome.storage.sync</code>). Chrome may sync these settings across the browsers you are signed in to. The Extension itself sends no data to the developer or to any third party.</p>
 
     <table>
         <tr><th>Data</th><th>Purpose</th></tr>
-        <tr><td>Feature toggle preferences</td><td>Remember which features you've enabled/disabled</td></tr>
-        <tr><td>Default model selection</td><td>Remember your preferred Gemini model</td></tr>
-        <tr><td>UI preferences</td><td>Remember your layout and display preferences</td></tr>
+        <tr><td>Feature switches</td><td>Remember which features you've turned on or off</td></tr>
+        <tr><td>Preferred model</td><td>Remember the Gemini model to select in new chats</td></tr>
+        <tr><td>Thinking level</td><td>Remember the thinking level to select in new chats</td></tr>
     </table>
 
     <p>This data:</p>
     <ul>
-        <li>Never leaves your device</li>
-        <li>Is not transmitted to any server</li>
-        <li>Is not accessible to us or any third party</li>
-        <li>Can be cleared by uninstalling the extension or clearing browser data</li>
+        <li>Is saved with Chrome's storage API, and Chrome may sync it across the browsers you are signed in to</li>
+        <li>Is not sent by the Extension to the developer or to any third party</li>
+        <li>Is not accessible to the developer</li>
+        <li>Can be cleared by uninstalling the extension or clearing browser data (synced copies follow your browser's sync settings)</li>
     </ul>
 
     <h2>Permissions Explained</h2>
     <table>
         <tr><th>Permission</th><th>Why It's Needed</th></tr>
-        <tr><td><code>activeTab</code></td><td>To apply UI enhancements to the Gemini page you're viewing</td></tr>
-        <tr><td><code>scripting</code></td><td>To inject the features (wider layout, shortcuts, etc.) into Gemini</td></tr>
-        <tr><td><code>storage</code></td><td>To save your preferences locally on your device</td></tr>
+        <tr><td><code>activeTab</code></td><td>The permission the Extension declares so the address-bar quick launch (type <code>gem</code>) can open Gemini in the current tab</td></tr>
+        <tr><td><code>storage</code></td><td>To save your settings with Chrome's storage API (Chrome may sync them across your signed-in browsers)</td></tr>
         <tr><td><code>host_permissions</code></td><td>To run only on Google Gemini pages</td></tr>
     </table>
 
@@ -92,11 +91,11 @@
     </ul>
 
     <h2>Data Security</h2>
-    <p>Since all data is stored locally on your device:</p>
+    <p>Since the Extension keeps only your settings and sends no data to the developer or any third party:</p>
     <ul>
-        <li>Your data is protected by your device's security</li>
-        <li>No data transmission means no risk of interception</li>
-        <li>No server-side storage means no risk of data breaches on our end</li>
+        <li>Your settings are protected by your browser and device security</li>
+        <li>The Extension transmits no data, so there is nothing for it to expose in transit</li>
+        <li>There is no developer-run server storage, so no risk of data breaches on our end</li>
     </ul>
 
     <h2>Children's Privacy</h2>
@@ -117,10 +116,10 @@
     <table>
         <tr><th>Question</th><th>Answer</th></tr>
         <tr><td>Do you collect my data?</td><td>No</td></tr>
-        <tr><td>Do you read my conversations?</td><td>No</td></tr>
+        <tr><td>Do you read my conversations?</td><td>Only inside the page, when you use a copy or export feature. Not stored or transmitted</td></tr>
         <tr><td>Do you use analytics?</td><td>No</td></tr>
         <tr><td>Do you share data with third parties?</td><td>No</td></tr>
-        <tr><td>Where is my data stored?</td><td>Only on your device</td></tr>
+        <tr><td>Where is my data stored?</td><td>Only your settings, in your browser's storage. Chrome may sync them across your signed-in browsers</td></tr>
         <tr><td>Can I delete my data?</td><td>Yes, uninstall or clear browser data</td></tr>
     </table>
 </body>
