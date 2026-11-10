@@ -8,11 +8,13 @@
  * Gemini's model picker is volatile, so this module avoids brittle assumptions:
  *  - Per-option data-test-ids are rotating hashes ("bard-mode-option-<hash>"), not
  *    stable names, so we match options by the version-agnostic tier NAME instead.
- *  - Labels carry a version prefix ("3.1 Pro", "3.5 Flash"); the prefix is stripped
- *    before matching.
- *  - The lineup varies by account (e.g. "Flash-Lite / Flash / Pro" or
+ *  - Labels carry a version prefix ("3.1 Pro", "3.8 Flash", "4 Argon"); the prefix
+ *    is stripped before matching.
+ *  - The lineup varies by account (e.g. "Flash-Lite / Flash / Pro / Argon" or
  *    "Flash / Thinking / Pro"); an unavailable preference simply no-ops.
- *  - A "Thinking level" submenu (Standard / Extended) controls reasoning effort.
+ *  - A "Thinking level" submenu (Low / Medium / High) controls reasoning effort.
+ *    Gemini retired the old Standard / Extended names; those persisted values are
+ *    still accepted and resolve to the nearest current level.
  */
 
 (function() {
@@ -30,14 +32,25 @@
       'flash-lite': { name: 'Flash-Lite' },
       flash:        { name: 'Flash' },
       fast:         { name: 'Flash', alias: 'flash' }, // "fast" is an alias for Flash
-      thinking:     { name: 'Thinking' },
       pro:          { name: 'Pro' },
+      argon:        { name: 'Argon' },
+      // Gemini no longer offers a standalone "Thinking" tier — the lineup is now
+      // Flash-Lite / Flash / Pro / Argon, with reasoning effort as the separate
+      // "Thinking level" control. Map the retired preference onto Argon (the new
+      // "complex tasks" tier) so an existing saved value keeps doing something
+      // instead of silently no-opping.
+      thinking:     { name: 'Argon', legacy: 'argon' },
     },
 
     // Thinking-effort levels (the "Thinking level" submenu inside the mode picker).
     EFFORTS: {
-      standard: { name: 'Standard' },
-      extended: { name: 'Extended' },
+      low:      { name: 'Low' },
+      medium:   { name: 'Medium' },
+      high:     { name: 'High' },
+      // Gemini renamed these: Standard/Extended became Low/Medium/High. Keep the
+      // old persisted values working by resolving them to the nearest new level.
+      standard: { name: 'Medium', legacy: 'medium' },
+      extended: { name: 'High', legacy: 'high' },
     },
 
     SELECTORS: {
@@ -47,6 +60,9 @@
       MODEL_OPTION: '[data-test-id^="bard-mode-option-"]',
       // The "Thinking level" submenu trigger inside the open mode menu.
       THINKING_LEVEL_ITEM: 'gem-menu-item[value="thinking_level"]',
+      // Effort options render as menuitemradios WITHOUT a "bard-mode-option-" id
+      // (they live in the submenu, present in the DOM even while it is collapsed).
+      EFFORT_OPTION: '[role="menuitemradio"]:not([data-test-id^="bard-mode-option-"])',
       // Visible current-model label inside the picker button.
       CURRENT_MODEL_LABEL: '.input-area-switch-label',
     },
@@ -102,6 +118,35 @@
   function nameMatches(label, name) {
     const stripped = stripVersionPrefix(label).toLowerCase();
     return new RegExp('^' + escapeRe(name.toLowerCase()) + '(?![-\\w])').test(stripped);
+  }
+
+  // The picker's visible label concatenates the model name and the effort level
+  // with no separator ("ArgonHigh", "FlashLiteHigh"), which would defeat the
+  // word-boundary check in nameMatches(). Drop a trailing effort word first.
+  function stripEffortSuffix(text) {
+    const names = Object.values(CONFIG.EFFORTS).map(effort => escapeRe(effort.name));
+    if (!names.length) return String(text || '').trim();
+    const re = new RegExp('\\s*(?:' + names.join('|') + ')$', 'i');
+    return String(text || '').replace(re, '').trim();
+  }
+
+  // Resolves a stored preference to the canonical entry it should act on, so a
+  // retired value (e.g. "thinking", "extended") compares equal to the tier it now
+  // maps to instead of re-applying the picker on every page load.
+  function resolvePreference(map, key) {
+    const entry = map[key];
+    if (!entry) return null;
+    if (entry.legacy) return entry.legacy;
+    if (entry.alias) return entry.alias;
+    return key;
+  }
+
+  function resolveModelKey(key) {
+    return resolvePreference(CONFIG.MODELS, key);
+  }
+
+  function resolveEffortKey(key) {
+    return resolvePreference(CONFIG.EFFORTS, key);
   }
 
   // ============================================================================
@@ -207,18 +252,18 @@
     const button = document.querySelector(CONFIG.SELECTORS.MODEL_PICKER_BUTTON);
     if (!button) return null;
 
-    // Prefer the accessible name ("Open mode picker, currently Flash"), then the
-    // visible label element, then the button's raw text content.
+    // Prefer the accessible name ("Open mode picker, currently Argon High"), then
+    // the visible label element, then the button's raw text content.
     let text = (button.getAttribute('aria-label') || '').match(/currently\s+(.+)$/i)?.[1];
     if (!text) {
       const label = button.querySelector(CONFIG.SELECTORS.CURRENT_MODEL_LABEL);
       text = (label || button).textContent;
     }
-    text = (text || '').trim();
+    text = stripEffortSuffix((text || '').trim());
     if (!text) return null;
 
     for (const [key, model] of Object.entries(CONFIG.MODELS)) {
-      if (model.alias) continue; // only reverse-map to canonical keys
+      if (model.alias || model.legacy) continue; // only reverse-map to canonical keys
       if (nameMatches(text, model.name)) return key;
     }
     return null;
@@ -328,15 +373,31 @@
   }
 
   /**
-   * Reads the currently-selected effort from the "Thinking level X" label.
-   * The mode menu must be open. Returns an effort key or null.
+   * Reads the currently-selected effort level. The mode menu must be open.
+   * Returns a canonical effort key or null.
    */
   function getCurrentEffortFromMenu() {
     const item = findThinkingLevelItem();
     if (!item) return null;
+
+    // Newer builds show the active level inline in the trigger ("Thinking level
+    // High"); older ones did not. Try that first, then fall back to the checked
+    // option — the effort options are in the DOM even while the submenu is shut.
     const after = (item.textContent || '').replace(/^\s*thinking level/i, '').trim();
+    if (after) {
+      for (const [key, effort] of Object.entries(CONFIG.EFFORTS)) {
+        if (effort.legacy) continue;
+        if (nameMatches(after, effort.name)) return key;
+      }
+    }
+
+    const checked = Array.from(document.querySelectorAll(CONFIG.SELECTORS.EFFORT_OPTION))
+      .find(el => el.getAttribute('aria-checked') === 'true');
+    if (!checked) return null;
+    const text = (checked.textContent || '').trim();
     for (const [key, effort] of Object.entries(CONFIG.EFFORTS)) {
-      if (nameMatches(after, effort.name)) return key;
+      if (effort.legacy) continue;
+      if (nameMatches(text, effort.name)) return key;
     }
     return null;
   }
@@ -362,8 +423,10 @@
    * @returns {Promise<boolean>} True if already correct or successfully changed.
    */
   async function applyEffort(effortKey) {
-    const effort = CONFIG.EFFORTS[effortKey];
+    const resolved = resolveEffortKey(effortKey);
+    const effort = CONFIG.EFFORTS[resolved];
     if (!effort) return false;
+    effortKey = resolved;
 
     if (!(await openModelPicker())) {
       log('Could not open menu to set effort');
@@ -410,11 +473,11 @@
   // ============================================================================
 
   /**
-   * The model to apply (URL override takes precedence over the stored preference).
+   * The model to apply (URL override takes precedence over the stored preference),
+   * always resolved to its canonical key so retired values still compare correctly.
    */
   function getEffectiveModel() {
-    if (urlModelOverride) return urlModelOverride;
-    return currentPreferredModel;
+    return resolveModelKey(urlModelOverride || currentPreferredModel);
   }
 
   /**
@@ -423,7 +486,7 @@
    */
   async function applyDefaults() {
     const targetModel = getEffectiveModel();
-    const targetEffort = currentPreferredEffort;
+    const targetEffort = resolveEffortKey(currentPreferredEffort);
 
     if (!targetModel && !targetEffort) {
       log('Nothing to apply (no preferred model or effort)');
@@ -637,6 +700,9 @@
       applyDefaultModel,
       nameMatches,
       stripVersionPrefix,
+      stripEffortSuffix,
+      resolveModelKey,
+      resolveEffortKey,
     };
   }
 

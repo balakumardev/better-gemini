@@ -6,6 +6,7 @@
  * Features:
  * - Injects CSS to set max-width to 98% on conversation containers
  * - Lifts the fixed max-width on table blocks so tables widen with the text
+ * - Lifts Gemini's 708px clamp on block components (tables, code blocks)
  * - Uses MutationObserver to handle dynamically loaded content
  * - Persists styles across SPA navigation
  *
@@ -23,12 +24,17 @@ const IS_BROWSER_ENV_WIDER = typeof window !== 'undefined' && typeof document !=
 
 const STYLE_ID = 'better-gemini-wider-chat';
 
-// Gemini's table component (<table-block>) wraps each table in a div that
-// carries its own fixed pixel max-width (692px in the legacy layout). That
-// cap sits below .conversation-container, so widening the container leaves
-// tables narrow while the surrounding text is wide. Swap the fixed cap for a
-// container-relative one: the table fills the widened chat, while a table
-// that is genuinely wider still scrolls inside its own scroll container.
+// Gemini caps block components inside a response — code blocks, tables — at
+// 708px while the surrounding text runs the full width. In the current
+// "enable-extended-and-xl-grid" layout the cap comes from
+//   @scope (.md-content) to (.no-md > *) {
+//     .enable-extended-and-xl-grid :where(:scope) > :not(#_) { max-width: 708px; }
+//   }
+// so each block component sits centred in the widened chat with dead space on
+// both sides. Lift the cap only on the wrappers that actually hold a table or a
+// code block, so other <response-element> types — images in particular — keep
+// Gemini's own sizing. Descendant selectors are deliberate: Gemini has nested
+// these wrappers at different depths across releases.
 const WIDER_CHAT_CSS = `
 .conversation-container,
 .input-area-container,
@@ -40,6 +46,21 @@ user-query {
 table-block .table-block {
   max-width: 100% !important;
 }
+
+.md-content response-element:has(code-block),
+.md-content response-element:has(table-block) {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* A table is additionally clamped by padding: Gemini gives .table-content
+   matching left/right padding of (container - 708px) / 2 to centre it, which
+   shrinks the table itself. Drop the padding so the table can use the full
+   width of the widened chat. */
+table-block .table-content {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
 `;
 
 // Selectors to watch for dynamic content
@@ -49,6 +70,8 @@ const WATCHED_SELECTORS = [
   '.bottom-container',
   'user-query',
   'table-block',
+  'response-element',
+  'code-block',
 ];
 
 // ========== STATE ==========

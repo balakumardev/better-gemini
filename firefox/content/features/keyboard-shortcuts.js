@@ -139,8 +139,9 @@ const SHORTCUTS_CONFIG = {
       '[data-test-id="audio-toggle"]',
     ],
 
-    // Voice input button (redesign: label is "Microphone" — case matters for *=)
+    // Voice input button (redesign: label is now "Dictate (⌘⇧D)")
     VOICE_INPUT: [
+      'button[aria-label*="Dictate"]',
       'button[aria-label*="Microphone"]',
       'button[aria-label*="microphone"]',
       'button[aria-label*="voice"]',
@@ -167,8 +168,12 @@ const SHORTCUTS_CONFIG = {
       '[data-test-id="delete-chat"]',
     ],
 
-    // Sidebar container (for finding chats)
+    // Sidebar container (for finding chats).
+    // The old [data-test-id="sidebar"] / .sidebar markup is gone; the redesigned
+    // sidebar is the <bard-sidenav> custom element.
     SIDEBAR: [
+      'bard-sidenav',
+      'side-navigation-v2',
       '[data-test-id="sidebar"]',
       '.sidebar',
       'nav',

@@ -78,12 +78,48 @@ describe('Wider Chat Feature - Unit Tests', () => {
       expect(WIDER_CHAT_CSS).not.toMatch(/ng-tns-c|_ngcontent|ng-c\d|data-test-id/);
     });
 
+    test('WIDER_CHAT_CSS lifts the 708px clamp on block components', () => {
+      // Gemini's "enable-extended-and-xl-grid" layout caps every block component
+      // (table, code block) at 708px inside the response markdown, so a widened
+      // chat still shows them narrow and centred. The cap must be lifted on the
+      // block-component wrappers.
+      const rule = WIDER_CHAT_CSS.match(/\.md-content\s+response-element:has\(code-block\)[^{]*\{([^}]*)\}/);
+      expect(rule).not.toBeNull();
+      expect(rule[1]).toMatch(/max-width:\s*100%\s*!important/);
+      expect(rule[1]).toMatch(/width:\s*100%\s*!important/);
+    });
+
+    test('block-component rule covers tables as well as code blocks', () => {
+      expect(WIDER_CHAT_CSS).toMatch(/response-element:has\(table-block\)/);
+    });
+
+    test('block-component rule is scoped so images keep Gemini sizing', () => {
+      // A bare `response-element` selector would also stretch generated-image
+      // wrappers; only wrappers holding a table or code block may be widened.
+      const responseElementSelectors = WIDER_CHAT_CSS.match(/response-element[^{]*/g) || [];
+      expect(responseElementSelectors.length).toBeGreaterThan(0);
+      for (const selector of responseElementSelectors) {
+        expect(selector).toMatch(/:has\((code-block|table-block)\)/);
+      }
+    });
+
+    test('WIDER_CHAT_CSS removes the padding that shrinks tables', () => {
+      // Gemini centres a table by padding `.table-content` with
+      // (container - 708px) / 2, which also shrinks the table itself.
+      const rule = WIDER_CHAT_CSS.match(/table-block\s+\.table-content\s*\{([^}]*)\}/);
+      expect(rule).not.toBeNull();
+      expect(rule[1]).toMatch(/padding-left:\s*0\s*!important/);
+      expect(rule[1]).toMatch(/padding-right:\s*0\s*!important/);
+    });
+
     test('WATCHED_SELECTORS contains expected values', () => {
       expect(WATCHED_SELECTORS).toContain('.conversation-container');
       expect(WATCHED_SELECTORS).toContain('.input-area-container');
       expect(WATCHED_SELECTORS).toContain('.bottom-container');
       expect(WATCHED_SELECTORS).toContain('user-query');
       expect(WATCHED_SELECTORS).toContain('table-block');
+      expect(WATCHED_SELECTORS).toContain('response-element');
+      expect(WATCHED_SELECTORS).toContain('code-block');
     });
   });
 

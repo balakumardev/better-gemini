@@ -22,6 +22,12 @@ const DEFAULT_SETTINGS = {
 const DEFAULT_MODEL = 'flash';
 const DEFAULT_EFFORT = ''; // empty = leave Gemini's default thinking level untouched
 
+// Gemini renamed its model tiers and thinking levels. A value saved under an old
+// name is mapped onto the current one so an existing preference still loads (and
+// keeps saving) instead of silently resetting.
+const LEGACY_MODELS = { thinking: 'argon' };
+const LEGACY_EFFORTS = { standard: 'medium', extended: 'high' };
+
 // DOM element references
 const elements = {
   exportMarkdown: null,
@@ -62,8 +68,10 @@ async function loadSettings() {
   try {
     const result = await chrome.storage.sync.get([STORAGE_KEY, MODEL_STORAGE_KEY, EFFORT_STORAGE_KEY]);
     const settings = result[STORAGE_KEY] || DEFAULT_SETTINGS;
-    const selectedModel = result[MODEL_STORAGE_KEY] || DEFAULT_MODEL;
-    const selectedEffort = result[EFFORT_STORAGE_KEY] ?? DEFAULT_EFFORT;
+    const storedModel = result[MODEL_STORAGE_KEY];
+    const storedEffort = result[EFFORT_STORAGE_KEY] ?? DEFAULT_EFFORT;
+    const selectedModel = LEGACY_MODELS[storedModel] || storedModel || DEFAULT_MODEL;
+    const selectedEffort = LEGACY_EFFORTS[storedEffort] || storedEffort;
 
     // Apply settings to checkboxes
     elements.exportMarkdown.checked = settings.exportMarkdown !== false;
