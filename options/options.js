@@ -18,14 +18,15 @@ const DEFAULT_SETTINGS = {
   defaultModel: true
 };
 
-// Default model (Flash exists on every account) and thinking level
-const DEFAULT_MODEL = 'flash';
+// Default model (the "Everyday help" tier) and thinking level
+const DEFAULT_MODEL = 'hydrogen';
 const DEFAULT_EFFORT = ''; // empty = leave Gemini's default thinking level untouched
 
 // Gemini renamed its model tiers and thinking levels. A value saved under an old
 // name is mapped onto the current one so an existing preference still loads (and
 // keeps saving) instead of silently resetting.
-const LEGACY_MODELS = { thinking: 'argon' };
+// "flash" and "fast" were retired when Hydrogen took the Flash slot.
+const LEGACY_MODELS = { thinking: 'argon', flash: 'hydrogen', fast: 'hydrogen' };
 const LEGACY_EFFORTS = { standard: 'medium', extended: 'high' };
 
 // DOM element references

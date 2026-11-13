@@ -29,16 +29,23 @@
     // label we match against (after stripping any version prefix). Matching is
     // anchored so "Flash" never matches "Flash-Lite" (see nameMatches()).
     MODELS: {
-      'flash-lite': { name: 'Flash-Lite' },
-      flash:        { name: 'Flash' },
+      // `purpose` is the use-case label Gemini now shows as each option's headline
+      // ("Quick answers", "Everyday help", ...). The model name moved to a sublabel
+      // ("3.5 Flash-Lite", "4 Hydrogen"), so options are matched on that sublabel
+      // first; the purpose is only a fallback if the model names change again.
+      'flash-lite': { name: 'Flash-Lite', purpose: 'Quick answers' },
+      flash:        { name: 'Flash', fallback: 'hydrogen' },
       fast:         { name: 'Flash', alias: 'flash' }, // "fast" is an alias for Flash
-      pro:          { name: 'Pro' },
-      argon:        { name: 'Argon' },
-      // Gemini no longer offers a standalone "Thinking" tier — the lineup is now
-      // Flash-Lite / Flash / Pro / Argon, with reasoning effort as the separate
-      // "Thinking level" control. Map the retired preference onto Argon (the new
-      // "complex tasks" tier) so an existing saved value keeps doing something
-      // instead of silently no-opping.
+      pro:          { name: 'Pro', purpose: 'Detailed research' },
+      hydrogen:     { name: 'Hydrogen', purpose: 'Everyday help' },
+      argon:        { name: 'Argon', purpose: 'Code & analysis' },
+      carbon:       { name: 'Carbon', purpose: 'Most complex work' },
+      // Gemini no longer offers a standalone "Thinking" tier, and the standalone
+      // "Flash" tier has been replaced by Hydrogen. Reasoning effort is the separate
+      // "Thinking level" control. Map the retired "thinking" preference onto Argon
+      // (the "complex tasks" tier) so an existing saved value keeps doing something
+      // instead of silently no-opping. `flash` falls back to Hydrogen (its
+      // successor) only when the account's menu has no Flash option.
       thinking:     { name: 'Argon', legacy: 'argon' },
     },
 
@@ -130,6 +137,30 @@
     return String(text || '').replace(re, '').trim();
   }
 
+  function textOf(el) {
+    return el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '';
+  }
+
+  // True when a menu option names `model`. The model name lives in the option's
+  // `.sublabel` ("4 Hydrogen"); older layouts put it in `.label` ("Flash"). Both are
+  // read separately because the flat textContent now starts with a use-case label
+  // and ends with a badge ("Everyday help 4 HydrogenNew"), which defeats the
+  // anchored name match.
+  function optionNamesModel(opt, model) {
+    const sub = textOf(opt.querySelector('.sublabel'));
+    const label = textOf(opt.querySelector('.label'));
+    if (sub || label) {
+      return (sub && nameMatches(sub, model.name)) || (label && nameMatches(label, model.name));
+    }
+    return nameMatches(opt.textContent || '', model.name);
+  }
+
+  // Fallback: the option's headline is the model's use-case label.
+  function optionHasPurpose(opt, model) {
+    if (!model.purpose) return false;
+    return textOf(opt.querySelector('.label')).toLowerCase() === model.purpose.toLowerCase();
+  }
+
   // Resolves a stored preference to the canonical entry it should act on, so a
   // retired value (e.g. "thinking", "extended") compares equal to the tier it now
   // maps to instead of re-applying the picker on every page load.
@@ -159,6 +190,9 @@
   let observer = null;
   let lastAppliedUrl = null;
   let urlModelOverride = null; // Model from URL query param
+  // Preferences already resolved to their fallback tier this page session, so the
+  // picker is not reopened on every navigation just to re-pick the same fallback.
+  const fallbackAccepted = new Set();
 
   // ============================================================================
   // URL QUERY PARAM HANDLING
@@ -266,6 +300,11 @@
       if (model.alias || model.legacy) continue; // only reverse-map to canonical keys
       if (nameMatches(text, model.name)) return key;
     }
+    // The button may show the use-case label instead of the model name.
+    for (const [key, model] of Object.entries(CONFIG.MODELS)) {
+      if (model.alias || model.legacy || !model.purpose) continue;
+      if (text.toLowerCase() === model.purpose.toLowerCase()) return key;
+    }
     return null;
   }
 
@@ -303,30 +342,53 @@
 
   /**
    * Finds the menu option element for a model key (menu must be open).
+   * Matches the model name (sublabel, then label), then the use-case label.
    */
-  function findModelOption(modelKey) {
+  function findOptionForTier(modelKey) {
     const model = CONFIG.MODELS[modelKey];
     if (!model) return null;
 
-    const options = Array.from(document.querySelectorAll(CONFIG.SELECTORS.MODEL_OPTION));
-    let option = options.find(opt => nameMatches(opt.textContent || '', model.name));
+    // Options the account cannot use (signed-out users get everything but the
+    // lite tier greyed out) carry aria-disabled="true"; clicking them does nothing.
+    const usable = opt => opt.getAttribute('aria-disabled') !== 'true';
+    const options = Array.from(document.querySelectorAll(CONFIG.SELECTORS.MODEL_OPTION)).filter(usable);
+    let option = options.find(opt => optionNamesModel(opt, model)) ||
+      options.find(opt => optionHasPurpose(opt, model));
 
     // Fallback for UI variants: role-based menu items, excluding the sign-in row
     // and the "Thinking level" submenu trigger.
     if (!option) {
-      const items = document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]');
-      option = Array.from(items).find(opt => {
-        const t = (opt.textContent || '').toLowerCase();
-        if (t.includes('sign in') || t.includes('thinking level')) return false;
-        return nameMatches(opt.textContent || '', model.name);
-      });
+      const items = Array.from(document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]'))
+        .filter(opt => {
+          const t = (opt.textContent || '').toLowerCase();
+          return usable(opt) && !t.includes('sign in') && !t.includes('thinking level');
+        });
+      option = items.find(opt => optionNamesModel(opt, model)) ||
+        items.find(opt => optionHasPurpose(opt, model));
     }
     return option || null;
   }
 
   /**
+   * Resolves a preference to the option to click. Falls back to the tier's
+   * declared successor (flash -> hydrogen) when the account has no such option.
+   * @returns {{option: Element, key: string}|null}
+   */
+  function findModelOption(modelKey) {
+    const model = CONFIG.MODELS[modelKey];
+    if (!model) return null;
+    const direct = findOptionForTier(modelKey);
+    if (direct) return { option: direct, key: modelKey };
+    if (model.fallback) {
+      const fallback = findOptionForTier(model.fallback);
+      if (fallback) return { option: fallback, key: model.fallback };
+    }
+    return null;
+  }
+
+  /**
    * Selects a model from the open menu.
-   * @returns {boolean} True if an option was found and clicked.
+   * @returns {boolean} True if the preferred model is (now) selected.
    */
   function selectModel(modelKey) {
     const model = CONFIG.MODELS[modelKey];
@@ -334,13 +396,16 @@
       logError('Unknown model:', modelKey);
       return false;
     }
-    const option = findModelOption(modelKey);
-    if (!option) {
+    const found = findModelOption(modelKey);
+    if (!found) {
       logError('Model option not found (account may not offer it):', modelKey);
       return false;
     }
-    option.click();
-    log('Selected model:', model.name);
+    if (found.key !== modelKey) fallbackAccepted.add(modelKey);
+    // Clicking an already-checked option would just close the menu; skip it so a
+    // preference that resolves to the current model never causes a no-op click.
+    if (found.option.getAttribute('aria-checked') !== 'true') found.option.click();
+    log('Selected model:', found.key);
     return true;
   }
 
@@ -515,7 +580,9 @@
       if (targetModel && CONFIG.MODELS[targetModel]) {
         const currentModel = getCurrentModel();
         log('Model current/target:', currentModel, targetModel);
-        if (currentModel !== targetModel) {
+        const satisfiedByFallback = fallbackAccepted.has(targetModel) &&
+          currentModel === CONFIG.MODELS[targetModel].fallback;
+        if (currentModel !== targetModel && !satisfiedByFallback) {
           if (await openModelPicker()) {
             await sleep(50);
             if (selectModel(targetModel)) {
@@ -699,6 +766,9 @@
       applyDefaults,
       applyDefaultModel,
       nameMatches,
+      optionNamesModel,
+      optionHasPurpose,
+      findModelOption,
       stripVersionPrefix,
       stripEffortSuffix,
       resolveModelKey,

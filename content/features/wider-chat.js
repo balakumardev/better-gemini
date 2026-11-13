@@ -6,7 +6,7 @@
  * Features:
  * - Injects CSS to set max-width to 98% on conversation containers
  * - Lifts the fixed max-width on table blocks so tables widen with the text
- * - Lifts Gemini's 708px clamp on block components (tables, code blocks)
+ * - Lifts Gemini's 708px clamp on text blocks and on block components (tables, code blocks)
  * - Uses MutationObserver to handle dynamically loaded content
  * - Persists styles across SPA navigation
  *
@@ -45,6 +45,16 @@ user-query {
 
 table-block .table-block {
   max-width: 100% !important;
+}
+
+/* The same 708px cap now also centres every plain child of the response body —
+   paragraphs, lists, headings, quotes. Without this the text stays a 708px column
+   in the middle of a widened chat while code blocks and tables run edge to edge.
+   Block components (code, tables, images) are handled below, so images keep
+   Gemini's own sizing. */
+.md-content > :not(response-element):not(#_) {
+  max-width: 100% !important;
+  margin-inline: 0 !important;
 }
 
 .md-content response-element:has(code-block),

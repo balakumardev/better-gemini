@@ -31,14 +31,14 @@ Press Cmd+Shift+? (Ctrl+Shift+? on Windows and Linux) on Gemini to see the full 
 - Alt+1 to Alt+9: open the 1st to 9th chat in the sidebar
 - Cmd/Ctrl+Shift+;: copy the last code block
 - Cmd/Ctrl+Shift+C: copy the last response
-- Cmd/Ctrl+Shift+K: stop or start generation
+- Cmd/Ctrl+Shift+G: stop or start generation
 - Shift+Esc: focus the prompt box
 
 Export a full chat
 An Export button sits above the prompt box. Click it to copy the whole conversation as Markdown or download it as a .md file named after the chat.
 
 Default model and thinking level
-Choose a preferred model (Flash-Lite, Flash, Thinking or Pro) and a thinking level (Standard or Extended) on the options page. Better Gemini selects them when a chat opens. A choice your account does not offer is skipped.
+Choose a preferred model (Flash-Lite, Hydrogen, Pro, Argon or Carbon) and a thinking level (Low, Medium or High) on the options page. Better Gemini selects them when a chat opens. A choice your account does not offer is skipped.
 
 PRIVACY
 - Runs only on gemini.google.com.

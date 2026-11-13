@@ -96,11 +96,22 @@ describe('Wider Chat Feature - Unit Tests', () => {
     test('block-component rule is scoped so images keep Gemini sizing', () => {
       // A bare `response-element` selector would also stretch generated-image
       // wrappers; only wrappers holding a table or code block may be widened.
-      const responseElementSelectors = WIDER_CHAT_CSS.match(/response-element[^{]*/g) || [];
+      // `:not(response-element)` (the text-column rule) excludes wrappers, so skip it.
+      const responseElementSelectors = WIDER_CHAT_CSS.match(/(?<!:not\()response-element[^{]*/g) || [];
       expect(responseElementSelectors.length).toBeGreaterThan(0);
       for (const selector of responseElementSelectors) {
         expect(selector).toMatch(/:has\((code-block|table-block)\)/);
       }
+    });
+
+    test('WIDER_CHAT_CSS lifts the 708px clamp on plain text children too', () => {
+      // The same "enable-extended-and-xl-grid" rule centres every direct child of
+      // the response body at 708px, so paragraphs and lists stayed a narrow column
+      // inside the widened chat while code blocks and tables ran edge to edge.
+      const rule = WIDER_CHAT_CSS.match(/\.md-content\s*>\s*:not\(response-element\)[^{]*\{([^}]*)\}/);
+      expect(rule).not.toBeNull();
+      expect(rule[1]).toMatch(/max-width:\s*100%\s*!important/);
+      expect(rule[1]).toMatch(/margin-inline:\s*0\s*!important/);
     });
 
     test('WIDER_CHAT_CSS removes the padding that shrinks tables', () => {

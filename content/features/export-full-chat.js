@@ -506,6 +506,43 @@
   // ============================================================================
 
   /**
+   * Reads what the user typed. The prompt container also holds screen-reader
+   * copies ("You said" plus the whole prompt again), so textContent would
+   * repeat the prompt; the visible text lives in .query-text-line paragraphs.
+   * @param {HTMLElement} userEl - The user-query element
+   * @returns {string}
+   */
+  function getUserQueryText(userEl) {
+    const lines = userEl.querySelectorAll('.query-text-line');
+    if (lines.length) {
+      return Array.from(lines).map(line => (line.textContent || '').trim()).join('\n').trim();
+    }
+    const clone = userEl.cloneNode(true);
+    clone.querySelectorAll('.cdk-visually-hidden, .visually-hidden, button').forEach(el => el.remove());
+    return (clone.textContent || '').trim();
+  }
+
+  /**
+   * Converts a response element to Markdown with the converter shared with the
+   * per-response "MD" button (which understands code blocks and their language
+   * labels), falling back to this file's own converter.
+   * @param {HTMLElement} element
+   * @returns {string}
+   */
+  function toMarkdown(element) {
+    try {
+      const shared = window.BetterGeminiExport;
+      if (shared && typeof shared.convertHtmlToMarkdown === 'function') {
+        const markdown = shared.convertHtmlToMarkdown(element);
+        if (markdown) return markdown;
+      }
+    } catch (error) {
+      logError('Shared Markdown converter failed, using fallback', error);
+    }
+    return convertHtmlToMarkdown(element);
+  }
+
+  /**
    * Extracts all conversation turns from the page
    * @returns {Array<{role: string, content: string}>}
    */
@@ -521,7 +558,7 @@
       }
 
       if (userEl) {
-        const userText = userEl.textContent?.trim();
+        const userText = getUserQueryText(userEl);
         if (userText) {
           turns.push({ role: 'user', content: userText });
         }
@@ -534,7 +571,7 @@
       }
 
       if (assistantEl) {
-        const assistantMarkdown = convertHtmlToMarkdown(assistantEl);
+        const assistantMarkdown = toMarkdown(assistantEl);
         if (assistantMarkdown) {
           turns.push({ role: 'assistant', content: assistantMarkdown });
         }
@@ -1059,6 +1096,8 @@
       extractFullChat,
       formatChatAsMarkdown,
       convertHtmlToMarkdown,
+      getUserQueryText,
+      toMarkdown,
       repositionButton,
       findInputRegion,
       CONFIG,

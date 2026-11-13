@@ -6,7 +6,6 @@
  * Features:
  * - Chat management (new, delete, navigate)
  * - Text input and editing shortcuts
- * - Draft navigation
  * - Sharing and copying
  * - Audio and file controls
  * - Help popup with shortcut reference
@@ -69,15 +68,18 @@ const SHORTCUTS_CONFIG = {
       '[data-test-id="sidebar-toggle"]',
     ],
 
-    // Conversation list items
+    // Conversation list items. In the redesigned sidebar each item is a
+    // <gem-nav-list-item> host that wraps the real <a href="/app/<id>"> link.
     CONVERSATIONS: [
       '[data-test-id="conversation"]',
       '.conversation-item',
       '[role="listitem"]',
     ],
 
-    // Model response text
+    // Model response (the <model-response> element holds the Markdown body, the
+    // hidden "Gemini said" label and the action row)
     MODEL_RESPONSE: [
+      'model-response',
       '.model-response-text',
       '.response-content',
       '[data-test-id="model-response"]',
@@ -93,6 +95,10 @@ const SHORTCUTS_CONFIG = {
     // Text input field — the focusable element is the contenteditable itself;
     // `.text-input-field` is now a non-focusable wrapper, so it must not be first.
     TEXT_INPUT: [
+      // Scoped to the prompt box: a chat that is being edited also holds a
+      // .ql-editor inside its <user-query>, and that one comes first in the page.
+      'input-area-v2 div[contenteditable="true"].ql-editor',
+      'rich-textarea div[contenteditable="true"].ql-editor',
       'div[contenteditable="true"].ql-editor',
       'rich-textarea div[contenteditable="true"]',
       'div[contenteditable="true"]',
@@ -105,23 +111,6 @@ const SHORTCUTS_CONFIG = {
       'button[aria-label*="Stop"]',
       'button[aria-label*="Cancel"]',
       '[data-test-id="stop-button"]',
-    ],
-
-    // Draft navigation buttons
-    DRAFT_MORE: [
-      'button[aria-label*="more drafts"]',
-      'button[aria-label*="More drafts"]',
-      '[data-test-id="generate-drafts"]',
-    ],
-    DRAFT_NEXT: [
-      'button[aria-label*="Next draft"]',
-      'button[aria-label*="next draft"]',
-      '[data-test-id="next-draft"]',
-    ],
-    DRAFT_PREV: [
-      'button[aria-label*="Previous draft"]',
-      'button[aria-label*="previous draft"]',
-      '[data-test-id="prev-draft"]',
     ],
 
     // Share/link buttons
@@ -148,24 +137,39 @@ const SHORTCUTS_CONFIG = {
       '[data-test-id="voice-input"]',
     ],
 
-    // File upload button
+    // File upload. "Upload & tools" only opens a menu; the "Upload files" item
+    // inside it (rendered on demand) is what opens the file chooser.
     FILE_UPLOAD: [
       'button[aria-label*="Upload"]',
       'button[aria-label*="Attach"]',
-      'input[type="file"]',
       '[data-test-id="file-upload"]',
     ],
-
-    // Edit response button
-    EDIT_BUTTON: [
-      'button[aria-label*="Edit"]',
-      '[data-test-id="edit-response"]',
+    FILE_UPLOAD_ITEM: [
+      '[data-test-id="local-images-files-uploader-button"]',
+      '[role="menuitem"][aria-label^="Upload files"]',
+      'button.hidden-local-file-image-select',
     ],
 
-    // Delete chat button
-    DELETE_CHAT: [
-      'button[aria-label*="Delete"]',
-      '[data-test-id="delete-chat"]',
+    // Edit button on a user prompt (one per prompt; the last is the newest)
+    EDIT_BUTTON: [
+      '[data-test-id="prompt-edit-button"] button',
+      'user-query button[aria-label="Edit"]',
+      'button[aria-label*="Edit"]',
+    ],
+
+    // Delete current chat: open the conversation-actions menu in the top bar, then
+    // pick its "Delete" item. Gemini shows its own confirmation dialog, so the
+    // shortcut can never delete anything on its own.
+    CONVERSATION_ACTIONS: [
+      'button[aria-label*="conversation actions"]',
+      '[data-test-id="conversation-actions-menu-button"]',
+    ],
+    DELETE_ITEM: [
+      '[data-test-id="delete-button"]',
+    ],
+    MENU_ITEM: [
+      '[role="menuitem"]',
+      'gem-menu-item',
     ],
 
     // Sidebar container (for finding chats).
@@ -249,6 +253,30 @@ function queryAllWithSelectors(selectors) {
     });
   }
   return results;
+}
+
+/**
+ * Whether an element is actually rendered (not display:none or detached).
+ * @param {Element} element
+ * @returns {boolean}
+ */
+function isVisible(element) {
+  return !!element && element.getClientRects().length > 0;
+}
+
+/**
+ * Returns every match of the FIRST selector that matches anything, in document
+ * order. Unlike queryAllWithSelectors this never mixes in looser fallbacks, so
+ * an index (nth chat, last code block) always counts the same kind of element.
+ * @param {string[]} selectors - Array of CSS selectors to try
+ * @returns {Element[]} Matches of the first selector with results
+ */
+function queryAllFirstGroup(selectors) {
+  for (const selector of selectors) {
+    const elements = document.querySelectorAll(selector);
+    if (elements.length) return Array.from(elements);
+  }
+  return [];
 }
 
 /**
@@ -381,19 +409,16 @@ const SHORTCUT_DEFINITIONS = {
     { keys: `${modKeyLabel}+Shift+;`, description: 'Copy last code block' },
     { keys: `${modKeyLabel}+Shift+\'`, description: 'Copy second-to-last code block' },
     { keys: `${modKeyLabel}+Shift+C`, description: 'Copy response' },
-    { keys: `${modKeyLabel}+Shift+K`, description: 'Stop/start generation' },
+    { keys: `${modKeyLabel}+Shift+G`, description: 'Stop/start generation' },
   ],
-  'Draft Navigation': [
-    { keys: `${modKeyLabel}+Shift+D`, description: 'Generate more drafts' },
-    { keys: `${modKeyLabel}+Shift+,`, description: 'Previous draft' },
-    { keys: `${modKeyLabel}+Shift+.`, description: 'Next draft' },
-  ],
+  // Not bound on purpose: Gemini owns Shift+M (switch model), Shift+D (dictate)
+  // and Shift+K (search chats).
   'Sharing': [
     { keys: `${modKeyLabel}+Shift+L`, description: 'Copy prompt/response link' },
-    { keys: `${modKeyLabel}+Shift+M`, description: 'Copy chat link' },
+    { keys: `${modKeyLabel}+Shift+U`, description: 'Copy chat link' },
   ],
   'Audio & Files': [
-    { keys: `${modKeyLabel}+Shift+Y`, description: 'Play/pause audio' },
+    { keys: `${modKeyLabel}+Shift+Y`, description: 'Listen to the response' },
     { keys: `${modKeyLabel}+Shift+S`, description: 'Voice to text' },
     { keys: `${modKeyLabel}+O`, description: 'Open file' },
   ],
@@ -638,15 +663,31 @@ function actionNewChat() {
 }
 
 /**
- * Deletes the current chat
+ * Deletes the current chat: opens the conversation-actions menu and picks
+ * "Delete". Gemini then asks for confirmation itself, so nothing is deleted
+ * until the user confirms in Gemini's own dialog.
  */
-function actionDeleteChat() {
-  const deleteBtn = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.DELETE_CHAT);
-  if (deleteBtn) {
-    clickElement(deleteBtn);
-    showToast('Delete chat initiated', 'info');
+async function actionDeleteChat() {
+  const menuBtn = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.CONVERSATION_ACTIONS);
+  if (!menuBtn) {
+    showToast('Open a saved chat first', 'error');
+    return;
+  }
+  clickElement(menuBtn);
+
+  let deleteItem = null;
+  for (let i = 0; i < 12 && !deleteItem; i++) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    deleteItem = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.DELETE_ITEM) ||
+      queryAllWithSelectors(SHORTCUTS_CONFIG.SELECTORS.MENU_ITEM)
+        .find(el => /^\s*delete\b/i.test(el.textContent || ''));
+  }
+  if (deleteItem) {
+    clickElement(deleteItem);
+    showToast('Confirm deletion in the dialog', 'info');
   } else {
-    showToast('Delete button not found', 'error');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    showToast('Delete option not found', 'error');
   }
   log('Action: Delete chat');
 }
@@ -655,7 +696,10 @@ function actionDeleteChat() {
  * Toggles the sidebar
  */
 function actionToggleSidebar() {
-  const sidebarToggle = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.SIDEBAR_TOGGLE);
+  // "Open sidebar" and "Close sidebar" both stay in the DOM and only one is
+  // displayed; clicking the hidden one does nothing.
+  const sidebarToggle = queryAllWithSelectors(SHORTCUTS_CONFIG.SELECTORS.SIDEBAR_TOGGLE)
+    .find(isVisible);
   if (sidebarToggle) {
     clickElement(sidebarToggle);
     showToast('Sidebar toggled', 'success');
@@ -666,13 +710,31 @@ function actionToggleSidebar() {
 }
 
 /**
+ * Returns the sidebar's chat entries in document order.
+ * @returns {Element[]}
+ */
+function getConversations() {
+  return queryAllFirstGroup(SHORTCUTS_CONFIG.SELECTORS.CONVERSATIONS);
+}
+
+/**
+ * Opens a sidebar chat. The entry is a <gem-nav-list-item> host wrapping the
+ * real link, and only a click on that link makes Gemini navigate.
+ * @param {Element} item - A conversation entry
+ */
+function openConversation(item) {
+  const link = item.matches('a[href]') ? item : item.querySelector('a[href]');
+  clickElement(link || item);
+}
+
+/**
  * Navigates to the nth chat in sidebar
  * @param {number} n - Chat number (1-9)
  */
 function actionGoToChat(n) {
-  const conversations = queryAllWithSelectors(SHORTCUTS_CONFIG.SELECTORS.CONVERSATIONS);
+  const conversations = getConversations();
   if (conversations.length >= n) {
-    clickElement(conversations[n - 1]);
+    openConversation(conversations[n - 1]);
     showToast(`Switched to chat ${n}`, 'success');
   } else {
     showToast(`Chat ${n} not found`, 'error');
@@ -684,10 +746,10 @@ function actionGoToChat(n) {
  * Navigates to next chat
  */
 function actionNextChat() {
-  const conversations = queryAllWithSelectors(SHORTCUTS_CONFIG.SELECTORS.CONVERSATIONS);
+  const conversations = getConversations();
   const currentIndex = findCurrentChatIndex(conversations);
   if (currentIndex < conversations.length - 1) {
-    clickElement(conversations[currentIndex + 1]);
+    openConversation(conversations[currentIndex + 1]);
     showToast('Next chat', 'success');
   } else {
     showToast('Already at last chat', 'info');
@@ -699,10 +761,10 @@ function actionNextChat() {
  * Navigates to previous chat
  */
 function actionPrevChat() {
-  const conversations = queryAllWithSelectors(SHORTCUTS_CONFIG.SELECTORS.CONVERSATIONS);
+  const conversations = getConversations();
   const currentIndex = findCurrentChatIndex(conversations);
   if (currentIndex > 0) {
-    clickElement(conversations[currentIndex - 1]);
+    openConversation(conversations[currentIndex - 1]);
     showToast('Previous chat', 'success');
   } else {
     showToast('Already at first chat', 'info');
@@ -713,17 +775,24 @@ function actionPrevChat() {
 /**
  * Finds the index of the current active chat
  * @param {Element[]} conversations - List of conversation elements
- * @returns {number} Index of current chat, or 0 if not found
+ * @returns {number} Index of the open chat, or -1 when no listed chat is open
+ *   (e.g. a brand-new chat), so "next" lands on the first entry
  */
 function findCurrentChatIndex(conversations) {
+  const path = window.location.pathname;
   for (let i = 0; i < conversations.length; i++) {
-    if (conversations[i].classList.contains('active') ||
-        conversations[i].getAttribute('aria-selected') === 'true' ||
-        conversations[i].hasAttribute('data-active')) {
+    const item = conversations[i];
+    const link = item.matches('a[href]') ? item : item.querySelector('a[href]');
+    if (item.classList.contains('active') ||
+        item.getAttribute('aria-selected') === 'true' ||
+        item.hasAttribute('data-active') ||
+        (link && (link.getAttribute('aria-current') === 'page' ||
+                  link.classList.contains('is-active') ||
+                  link.getAttribute('href') === path))) {
       return i;
     }
   }
-  return 0;
+  return -1;
 }
 
 /**
@@ -741,10 +810,11 @@ function actionFocusInput() {
 }
 
 /**
- * Triggers edit mode
+ * Triggers edit mode on the newest prompt
  */
 function actionEditText() {
-  const editBtn = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.EDIT_BUTTON);
+  const editBtns = queryAllFirstGroup(SHORTCUTS_CONFIG.SELECTORS.EDIT_BUTTON);
+  const editBtn = editBtns[editBtns.length - 1];
   if (editBtn) {
     clickElement(editBtn);
     showToast('Edit mode', 'success');
@@ -755,15 +825,26 @@ function actionEditText() {
 }
 
 /**
+ * Reads the code of one rendered code block, without the language label or the
+ * copy/download buttons that sit in the block's header.
+ * @param {Element} block - A <code-block> (or <pre>) element
+ * @returns {string}
+ */
+function getCodeBlockText(block) {
+  const code = block.matches('pre, code') ? block
+    : block.querySelector('code[data-test-id="code-content"], pre code, code');
+  return (code ? code.textContent : block.textContent) || '';
+}
+
+/**
  * Copies a code block to clipboard
  * @param {number} index - Index from end (0 = last, 1 = second-to-last)
  */
 function actionCopyCodeBlock(index) {
-  const codeBlocks = queryAllWithSelectors(SHORTCUTS_CONFIG.SELECTORS.CODE_BLOCKS);
+  const codeBlocks = queryAllFirstGroup(SHORTCUTS_CONFIG.SELECTORS.CODE_BLOCKS);
   if (codeBlocks.length > index) {
     const targetBlock = codeBlocks[codeBlocks.length - 1 - index];
-    const code = targetBlock.textContent || targetBlock.innerText;
-    copyToClipboard(code);
+    copyToClipboard(getCodeBlockText(targetBlock));
     showToast(`Code block copied (${index === 0 ? 'last' : 'second-to-last'})`, 'success');
   } else {
     showToast('Code block not found', 'error');
@@ -772,14 +853,34 @@ function actionCopyCodeBlock(index) {
 }
 
 /**
+ * Reads a response as clean text. Prefers the Markdown converter shared with the
+ * "Copy as Markdown" button; otherwise the rendered text minus visually-hidden
+ * screen-reader labels ("Gemini said").
+ * @param {Element} response - A <model-response> (or inner response) element
+ * @returns {string}
+ */
+function getResponseText(response) {
+  try {
+    const exporter = window.BetterGeminiExport;
+    if (exporter && typeof exporter.extractMarkdownFromResponse === 'function') {
+      const markdown = exporter.extractMarkdownFromResponse(response);
+      if (markdown) return markdown;
+    }
+  } catch (e) {
+    logError('Markdown conversion failed, copying plain text', e);
+  }
+  const clone = response.cloneNode(true);
+  clone.querySelectorAll('.cdk-visually-hidden, .visually-hidden, button').forEach(el => el.remove());
+  return (clone.textContent || '').trim();
+}
+
+/**
  * Copies the last response to clipboard
  */
 function actionCopyResponse() {
-  const responses = queryAllWithSelectors(SHORTCUTS_CONFIG.SELECTORS.MODEL_RESPONSE);
+  const responses = queryAllFirstGroup(SHORTCUTS_CONFIG.SELECTORS.MODEL_RESPONSE);
   if (responses.length > 0) {
-    const lastResponse = responses[responses.length - 1];
-    const text = lastResponse.textContent || lastResponse.innerText;
-    copyToClipboard(text);
+    copyToClipboard(getResponseText(responses[responses.length - 1]));
     showToast('Response copied', 'success');
   } else {
     showToast('No response to copy', 'error');
@@ -804,48 +905,6 @@ function actionToggleGeneration() {
     showToast('No action available', 'info');
   }
   log('Action: Toggle generation');
-}
-
-/**
- * Generates more drafts
- */
-function actionGenerateDrafts() {
-  const draftBtn = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.DRAFT_MORE);
-  if (draftBtn) {
-    clickElement(draftBtn);
-    showToast('Generating more drafts', 'info');
-  } else {
-    showToast('Draft button not found', 'error');
-  }
-  log('Action: Generate drafts');
-}
-
-/**
- * Navigates to next draft
- */
-function actionNextDraft() {
-  const nextBtn = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.DRAFT_NEXT);
-  if (nextBtn) {
-    clickElement(nextBtn);
-    showToast('Next draft', 'success');
-  } else {
-    showToast('Next draft button not found', 'error');
-  }
-  log('Action: Next draft');
-}
-
-/**
- * Navigates to previous draft
- */
-function actionPrevDraft() {
-  const prevBtn = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.DRAFT_PREV);
-  if (prevBtn) {
-    clickElement(prevBtn);
-    showToast('Previous draft', 'success');
-  } else {
-    showToast('Previous draft button not found', 'error');
-  }
-  log('Action: Previous draft');
 }
 
 /**
@@ -878,7 +937,9 @@ function actionCopyChatLink() {
  * Toggles audio playback
  */
 function actionToggleAudio() {
-  const audioBtn = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.AUDIO_PLAY);
+  // Newest response first: its own "Listen" control reads that response aloud.
+  const audioBtns = queryAllFirstGroup(SHORTCUTS_CONFIG.SELECTORS.AUDIO_PLAY);
+  const audioBtn = audioBtns[audioBtns.length - 1];
   if (audioBtn) {
     clickElement(audioBtn);
     showToast('Audio toggled', 'success');
@@ -903,19 +964,35 @@ function actionVoiceInput() {
 }
 
 /**
- * Opens file dialog
+ * Opens the file chooser. "Upload & tools" only opens a menu, so click it and
+ * then the "Upload files" item it renders.
  */
-function actionOpenFile() {
-  const fileInput = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.FILE_UPLOAD);
-  if (fileInput) {
-    if (fileInput.tagName === 'INPUT') {
-      fileInput.click();
-    } else {
-      clickElement(fileInput);
+async function actionOpenFile() {
+  const findItem = () => queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.FILE_UPLOAD_ITEM);
+  let item = findItem();
+
+  if (!item) {
+    const menuBtn = queryWithSelectors(SHORTCUTS_CONFIG.SELECTORS.FILE_UPLOAD);
+    if (!menuBtn) {
+      showToast('File upload not found', 'error');
+      return;
     }
+    clickElement(menuBtn);
+    for (let i = 0; i < 12 && !item; i++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      item = findItem();
+    }
+  }
+
+  if (item && !item.disabled && item.getAttribute('aria-disabled') !== 'true') {
+    clickElement(item);
     showToast('File dialog opened', 'info');
   } else {
-    showToast('File upload not found', 'error');
+    // Upload is disabled when signed out. Close the menu we opened so its
+    // backdrop doesn't swallow the next click.
+    const backdrop = document.querySelector('.cdk-overlay-backdrop-showing');
+    if (backdrop) backdrop.click();
+    showToast(item ? 'File upload needs a signed-in account' : 'Upload files option not found', 'error');
   }
   log('Action: Open file');
 }
@@ -1035,10 +1112,12 @@ function handleKeydown(event) {
     return;
   }
 
-  // Alt+1-9: Go to nth chat (works anywhere)
-  if (hasAlt && event.key >= '1' && event.key <= '9') {
+  // Alt+1-9: Go to nth chat (works anywhere). Use event.code: on macOS
+  // Option+1 types "¡", so event.key is no longer the digit.
+  const altDigit = hasAlt && !hasMod && /^(?:Digit|Numpad)([1-9])$/.exec(event.code || '');
+  if (altDigit) {
     event.preventDefault();
-    actionGoToChat(parseInt(event.key, 10));
+    actionGoToChat(parseInt(altDigit[1], 10));
     return;
   }
 
@@ -1108,26 +1187,10 @@ function handleKeydown(event) {
         actionCopyResponse();
         break;
 
-      case 'k':
+      // Shift+K (search chats) belongs to Gemini itself; generation moved to Shift+G.
+      case 'g':
         event.preventDefault();
         actionToggleGeneration();
-        break;
-
-      case 'd':
-        event.preventDefault();
-        actionGenerateDrafts();
-        break;
-
-      case ',':
-      case '<':
-        event.preventDefault();
-        actionPrevDraft();
-        break;
-
-      case '.':
-      case '>':
-        event.preventDefault();
-        actionNextDraft();
         break;
 
       case 'l':
@@ -1135,7 +1198,7 @@ function handleKeydown(event) {
         actionCopyPromptLink();
         break;
 
-      case 'm':
+      case 'u':
         event.preventDefault();
         actionCopyChatLink();
         break;
@@ -1271,9 +1334,6 @@ if (IS_TEST_ENV) {
     actionCopyCodeBlock,
     actionCopyResponse,
     actionToggleGeneration,
-    actionGenerateDrafts,
-    actionNextDraft,
-    actionPrevDraft,
     actionCopyPromptLink,
     actionCopyChatLink,
     actionToggleAudio,
@@ -1283,6 +1343,12 @@ if (IS_TEST_ENV) {
     // Utility functions
     queryWithSelectors,
     queryAllWithSelectors,
+    queryAllFirstGroup,
+    isVisible,
+    getConversations,
+    findCurrentChatIndex,
+    getCodeBlockText,
+    getResponseText,
     clickElement,
     copyToClipboard,
     handleKeydown,
